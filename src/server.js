@@ -110,6 +110,9 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
         status_code INTEGER,
         status_text TEXT,
         client_email TEXT,
+        client_name TEXT,
+        client_cpf TEXT,
+        client_phone TEXT,
         product_name TEXT,
         total_value_cents INTEGER,
         created_at TEXT,
@@ -134,6 +137,9 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
         }
       };
 
+      ensureColumn('client_name');
+      ensureColumn('client_cpf');
+      ensureColumn('client_phone');
       ensureColumn('attendant_code');
       ensureColumn('attendant_name');
     });
@@ -346,6 +352,9 @@ const createApp = (options = {}) => {
       status_code: payload.status_code ?? null,
       status_text: payload.status_text ?? null,
       client_email: payload.client_email ?? null,
+      client_name: payload.client_name ?? null,
+      client_cpf: payload.client_cpf ?? null,
+      client_phone: payload.client_phone ?? null,
       product_name: payload.product_name ?? null,
       total_value_cents: payload.total_value_cents ?? null,
       created_at: payload.created_at || now,
@@ -361,6 +370,9 @@ const createApp = (options = {}) => {
         status_code,
         status_text,
         client_email,
+        client_name,
+        client_cpf,
+        client_phone,
         product_name,
         total_value_cents,
         created_at,
@@ -368,11 +380,14 @@ const createApp = (options = {}) => {
         raw_payload,
         attendant_code,
         attendant_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(transaction_id) DO UPDATE SET
         status_code = excluded.status_code,
         status_text = excluded.status_text,
         client_email = excluded.client_email,
+        client_name = excluded.client_name,
+        client_cpf = excluded.client_cpf,
+        client_phone = excluded.client_phone,
         product_name = excluded.product_name,
         total_value_cents = excluded.total_value_cents,
         created_at = excluded.created_at,
@@ -387,6 +402,9 @@ const createApp = (options = {}) => {
       sale.status_code,
       sale.status_text,
       sale.client_email,
+      sale.client_name,
+      sale.client_cpf,
+      sale.client_phone,
       sale.product_name,
       sale.total_value_cents,
       sale.created_at,
@@ -413,6 +431,9 @@ const createApp = (options = {}) => {
         status_code,
         status_text,
         client_email,
+        client_name,
+        client_cpf,
+        client_phone,
         product_name,
         total_value_cents,
         created_at,
@@ -465,7 +486,7 @@ const createApp = (options = {}) => {
           const fields = [
             sale.client_email,
             sale.client_name,
-            sale.cpf,
+            sale.client_cpf,
             sale.transaction_id,
             sale.product_name
           ];

@@ -3,6 +3,36 @@
 ## Visão Geral
 Este repositório contém o Frontend do Painel de Afiliado focado na gestão de vendas da plataforma Braip no modelo **After Pay**. A interface foi construída com HTML, CSS e JavaScript puro, utilizando dados de exemplo e simulações visuais. O objetivo final é integrar este Frontend a um Backend que processe os dados reais provenientes da Braip.
 
+
+## Backend (Fase 1)
+Esta fase inicial do backend fornece apenas os recursos necessários para receber postbacks da Braip e consultar as vendas armazenadas localmente.
+
+### Instalação das dependências
+Execute o comando abaixo dentro da pasta do projeto para instalar todas as dependências do backend:
+
+```bash
+npm install
+```
+
+### Como iniciar o servidor backend
+Inicie o servidor Express em modo de desenvolvimento com o comando:
+
+```bash
+npm start
+```
+
+Por padrão o serviço ficará disponível em `http://localhost:3001`.
+
+### Endpoints disponíveis
+- `POST http://localhost:3001/api/postback`
+  - Recebe o payload enviado pela Braip e faz **upsert** na tabela `sales` do SQLite.
+  - Nenhum cabeçalho ou token de autenticação é necessário.
+- `GET http://localhost:3001/api/sales`
+  - Retorna todos os registros presentes na tabela `sales` em formato JSON.
+  - Nenhuma autenticação é necessária.
+
+A base de dados SQLite é criada automaticamente (arquivo `data/sales.sqlite`) e a tabela `sales` é provisionada com as colunas essenciais (`transaction_id`, `status_code`, `status_text`, `client_email`, `product_name`, `total_value_cents`, `created_at`, `updated_at`, `raw_payload`).
+
 ## Tecnologias Utilizadas
 - **HTML5** para a estrutura semântica das páginas.
 - **CSS3** para estilização, layout utilizando Flexbox e um tema escuro.

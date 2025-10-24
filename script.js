@@ -545,17 +545,18 @@ async function loadSalesData(filters = {}) {
         salesData.forEach((sale) => {
             const row = document.createElement('tr');
             const transactionId = sale.transaction_id || sale.id || '';
-            const cliente = sale.cliente || sale.customer_name || '';
-            const email = sale.email || sale.customer_email || '';
-            const telefone = sale.telefone || sale.phone || '';
-            const cpf = sale.cpf || sale.document || '';
-            const produto = sale.produto || sale.product_name || '';
-            const valorNumerico = toNumericValue(sale.valor_numerico ?? sale.valor);
+            const cliente = sale.client_name || sale.cliente || sale.customer_name || '';
+            const email = sale.client_email || sale.email || sale.customer_email || '';
+            const telefone = sale.client_phone || sale.telefone || sale.phone || '';
+            const cpf = sale.client_cpf || sale.cpf || sale.document || '';
+            const produto = sale.product_name || sale.produto || '';
+            const valorNumerico = getSaleNumericValue(sale);
             const valorFormatado = sale.valor_formatado || formatCurrency(valorNumerico);
             const status = sale.status || '';
             const statusTexto = sale.status_texto || sale.status_text || status;
             const statusCssClass = sale.status_css_class || status;
-            const dataAgendada = sale.data_agendada || sale.scheduled_at || '';
+            const dataOriginal = sale.created_at || sale.updated_at || sale.data_agendada || sale.scheduled_at || '';
+            const dataAgendada = sale.data_formatada || formatDate(dataOriginal);
             const historico = Array.isArray(sale.historico)
                 ? sale.historico.map((item) => `<li>${item}</li>`).join('')
                 : sale.historico || '';
@@ -573,7 +574,7 @@ async function loadSalesData(filters = {}) {
             row.dataset.status = status;
             row.dataset.statusTexto = statusTexto;
             row.dataset.statusCssClass = statusCssClass;
-            row.dataset.data = dataAgendada;
+            row.dataset.data = dataOriginal;
             row.dataset.historico = historico;
             row.dataset.atendente = atendenteCodigo || 'nao_definido';
             row.dataset.atendenteNome = atendenteNome;
@@ -588,7 +589,7 @@ async function loadSalesData(filters = {}) {
             atendenteTd.textContent = atendenteNome || obterNomeAtendente(atendenteCodigo) || 'Não Definido';
 
             const dataTd = document.createElement('td');
-            dataTd.textContent = formatDate(dataAgendada);
+            dataTd.textContent = dataAgendada;
 
             const valorTd = document.createElement('td');
             valorTd.textContent = valorFormatado;
@@ -627,7 +628,7 @@ function updateSalesSummary(salesData) {
     }
 
     if (salesTotalValueEl) {
-        const total = salesData.reduce((acc, sale) => acc + toNumericValue(sale.valor_numerico ?? sale.valor), 0);
+        const total = salesData.reduce((acc, sale) => acc + getSaleNumericValue(sale), 0);
         salesTotalValueEl.textContent = formatCurrency(total);
     }
 }
@@ -865,6 +866,26 @@ function toNumericValue(value) {
         const parsed = Number(normalized);
         return Number.isNaN(parsed) ? 0 : parsed;
     }
+    return 0;
+}
+
+function getSaleNumericValue(sale = {}) {
+    if (typeof sale.total_value_cents === 'number') {
+        return sale.total_value_cents / 100;
+    }
+
+    if (typeof sale.valor_numerico === 'number') {
+        return sale.valor_numerico;
+    }
+
+    if (typeof sale.total_value === 'number') {
+        return sale.total_value;
+    }
+
+    if (sale.valor !== undefined) {
+        return toNumericValue(sale.valor);
+    }
+
     return 0;
 }
 

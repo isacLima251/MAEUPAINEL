@@ -46,6 +46,9 @@ test('POST /api/postback stores the sale and GET /api/sales returns it', { concu
     status_code: 1,
     status_text: 'Aguardando Pagamento',
     client_email: 'cliente@example.com',
+    client_name: 'Cliente Exemplo',
+    client_cpf: '123.456.789-00',
+    client_phone: '(11) 91234-5678',
     product_name: 'Produto Exemplo',
     total_value_cents: 5000,
     created_at: '2023-10-01 10:00:00',
@@ -62,6 +65,9 @@ test('POST /api/postback stores the sale and GET /api/sales returns it', { concu
   assert.equal(listResponse.body[0].status_code, payload.status_code);
   assert.equal(listResponse.body[0].attendant_code, 'nao_definido');
   assert.equal(listResponse.body[0].attendant_name, 'Não Definido');
+  assert.equal(listResponse.body[0].client_name, payload.client_name);
+  assert.equal(listResponse.body[0].client_cpf, payload.client_cpf);
+  assert.equal(listResponse.body[0].client_phone, payload.client_phone);
   assert.equal(listResponse.body[0].valor_formatado, 'R$ 50,00');
   assert.equal(listResponse.body[0].status_css_class, 'agendado');
   assert.equal(listResponse.body[0].data_formatada, '01/10/2023');

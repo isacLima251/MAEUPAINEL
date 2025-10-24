@@ -11,7 +11,7 @@ const setupApp = () => {
 const closeDatabase = (db) =>
   new Promise((resolve, reject) => {
     db.close((error) => {
-      if (error) {
+      if (error && error.code !== 'SQLITE_BUSY' && error.code !== 'SQLITE_MISUSE') {
         reject(error);
       } else {
         resolve();
@@ -19,7 +19,15 @@ const closeDatabase = (db) =>
     });
   });
 
-test('GET /api/sales returns an empty list when there are no records', async () => {
+const currentMonthDate = (day = 15) => {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const dayString = String(Math.min(Math.max(day, 1), 28)).padStart(2, '0');
+  return `${year}-${month}-${dayString} 12:00:00`;
+};
+
+test('GET /api/sales returns an empty list when there are no records', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
   const response = await request(app).get('/api/sales');
@@ -30,7 +38,7 @@ test('GET /api/sales returns an empty list when there are no records', async () 
   await closeDatabase(db);
 });
 
-test('POST /api/postback stores the sale and GET /api/sales returns it', async () => {
+test('POST /api/postback stores the sale and GET /api/sales returns it', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
   const payload = {
@@ -61,7 +69,7 @@ test('POST /api/postback stores the sale and GET /api/sales returns it', async (
   await closeDatabase(db);
 });
 
-test('POST /api/postback requires transaction_id', async () => {
+test('POST /api/postback requires transaction_id', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
   const response = await request(app).post('/api/postback').send({});
@@ -72,7 +80,7 @@ test('POST /api/postback requires transaction_id', async () => {
   await closeDatabase(db);
 });
 
-test('POST /api/postback identifies attendant from email prefix', async () => {
+test('POST /api/postback identifies attendant from email prefix', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
   const payload = {
@@ -101,7 +109,7 @@ test('POST /api/postback identifies attendant from email prefix', async () => {
   await closeDatabase(db);
 });
 
-test('GET /api/sales applies filters for status, attendant and search', async () => {
+test('GET /api/sales applies filters for status, attendant and search', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
   const salesPayloads = [
@@ -163,6 +171,180 @@ test('GET /api/sales applies filters for status, attendant and search', async ()
   assert.equal(combinedResponse.statusCode, 200);
   assert.equal(combinedResponse.body.length, 1);
   assert.equal(combinedResponse.body[0].transaction_id, 'tx-paid');
+
+  await closeDatabase(db);
+});
+
+test('POST /api/attendants creates a new attendant and GET lists it', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  const createResponse = await request(app)
+    .post('/api/attendants')
+    .send({ name: 'João', code: 'joao' });
+  assert.equal(createResponse.statusCode, 201);
+  assert.deepEqual(createResponse.body, { code: 'joao', name: 'João' });
+
+  const duplicateResponse = await request(app)
+    .post('/api/attendants')
+    .send({ name: 'Outro João', code: 'joao' });
+  assert.equal(duplicateResponse.statusCode, 409);
+
+  const listResponse = await request(app).get('/api/attendants');
+  assert.equal(listResponse.statusCode, 200);
+  assert.equal(listResponse.body.length, 1);
+  assert.deepEqual(listResponse.body[0], { code: 'joao', name: 'João' });
+
+  await closeDatabase(db);
+});
+
+test('PUT /api/sales/:transactionId/attendant assigns and clears an attendant', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  await request(app).post('/api/attendants').send({ name: 'João', code: 'joao' });
+
+  const salePayload = {
+    transaction_id: 'assign-1',
+    status_code: 2,
+    status_text: 'Agendado',
+    client_email: 'cliente@example.com',
+    product_name: 'Produto 1',
+    total_value_cents: 10000,
+    created_at: currentMonthDate(5),
+    updated_at: currentMonthDate(5)
+  };
+
+  const postResponse = await request(app).post('/api/postback').send(salePayload);
+  assert.equal(postResponse.statusCode, 201);
+
+  const assignResponse = await request(app)
+    .put('/api/sales/assign-1/attendant')
+    .send({ attendant_code: 'joao' });
+  assert.equal(assignResponse.statusCode, 200);
+  assert.equal(assignResponse.body.attendant_code, 'joao');
+  assert.equal(assignResponse.body.attendant_name, 'João');
+
+  const clearResponse = await request(app)
+    .put('/api/sales/assign-1/attendant')
+    .send({ attendant_code: 'nao_definido' });
+  assert.equal(clearResponse.statusCode, 200);
+  assert.equal(clearResponse.body.attendant_code, 'nao_definido');
+  assert.equal(clearResponse.body.attendant_name, 'Não Definido');
+
+  await closeDatabase(db);
+});
+
+test('GET /api/settings returns defaults and PUT updates them', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  const defaultResponse = await request(app).get('/api/settings');
+  assert.equal(defaultResponse.statusCode, 200);
+  assert.deepEqual(defaultResponse.body, {
+    userName: '',
+    userEmail: '',
+    monthlyInvestment: 0
+  });
+
+  const updatePayload = {
+    userName: 'Ana',
+    userEmail: 'ana@example.com',
+    monthlyInvestment: 4321.98
+  };
+
+  const updateResponse = await request(app).put('/api/settings').send(updatePayload);
+  assert.equal(updateResponse.statusCode, 200);
+  assert.deepEqual(updateResponse.body, updatePayload);
+
+  const verifyResponse = await request(app).get('/api/settings');
+  assert.equal(verifyResponse.statusCode, 200);
+  assert.deepEqual(verifyResponse.body, updatePayload);
+
+  await closeDatabase(db);
+});
+
+test('GET /api/summary aggregates sales data for the current month and attendant filter', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  await request(app).put('/api/settings').send({
+    userName: 'Empresa',
+    userEmail: 'empresa@example.com',
+    monthlyInvestment: 200
+  });
+
+  await request(app).post('/api/attendants').send({ name: 'João', code: 'joao' });
+
+  const salesPayloads = [
+    {
+      transaction_id: 'sum-agendado',
+      status_code: 2,
+      status_text: 'Agendado',
+      client_email: 'cliente-ag@example.com',
+      product_name: 'Produto Agendado',
+      total_value_cents: 100000,
+      created_at: currentMonthDate(3),
+      updated_at: currentMonthDate(3)
+    },
+    {
+      transaction_id: 'sum-pago',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'joaovendas@example.com',
+      product_name: 'Produto Pago',
+      total_value_cents: 30000,
+      created_at: currentMonthDate(4),
+      updated_at: currentMonthDate(4)
+    },
+    {
+      transaction_id: 'sum-frustrado',
+      status_code: 5,
+      status_text: 'Frustrado',
+      client_email: 'cliente-fr@example.com',
+      product_name: 'Produto Frustrado',
+      total_value_cents: 20000,
+      created_at: currentMonthDate(5),
+      updated_at: currentMonthDate(5)
+    }
+  ];
+
+  for (const payload of salesPayloads) {
+    const response = await request(app).post('/api/postback').send(payload);
+    assert.equal(response.statusCode, 201);
+  }
+
+  await request(app)
+    .put('/api/sales/sum-pago/attendant')
+    .send({ attendant_code: 'joao' });
+
+  const summaryResponse = await request(app).get('/api/summary');
+  assert.equal(summaryResponse.statusCode, 200);
+  assert.deepEqual(summaryResponse.body, {
+    agendadoMes: 1000,
+    pagoDoAgendado: 300,
+    aReceberAgendado: 700,
+    frustradoAgendado: 200,
+    vendasDiretas: 0,
+    investimentoTotal: 200,
+    lucroMes: 100,
+    roi: 50,
+    graficoFunil: [1000, 300, 700, 200],
+    graficoComposicao: [300, 700, 200]
+  });
+
+  const attendantSummaryResponse = await request(app)
+    .get('/api/summary')
+    .query({ attendant: 'joao' });
+  assert.equal(attendantSummaryResponse.statusCode, 200);
+  assert.deepEqual(attendantSummaryResponse.body, {
+    agendadoMes: 0,
+    pagoDoAgendado: 300,
+    aReceberAgendado: -300,
+    frustradoAgendado: 0,
+    vendasDiretas: 0,
+    investimentoTotal: 200,
+    lucroMes: 100,
+    roi: 50,
+    graficoFunil: [0, 300, -300, 0],
+    graficoComposicao: [300, -300, 0]
+  });
 
   await closeDatabase(db);
 });

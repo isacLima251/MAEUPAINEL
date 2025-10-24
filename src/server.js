@@ -38,6 +38,12 @@ const ensureDirectoryExists = (databasePath) => {
   fs.mkdirSync(directory, { recursive: true });
 };
 
+const DEFAULT_SETTINGS = {
+  user_name: '',
+  user_email: '',
+  monthly_investment: 0
+};
+
 const initializeDatabase = (databasePath = defaultDatabasePath) => {
   ensureDirectoryExists(databasePath);
 
@@ -76,6 +82,23 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
       ensureColumn('attendant_code');
       ensureColumn('attendant_name');
     });
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS attendants (
+        code TEXT PRIMARY KEY,
+        name TEXT NOT NULL
+      )`
+    );
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        user_name TEXT,
+        user_email TEXT,
+        monthly_investment REAL DEFAULT 0
+      )`
+    );
+
   });
 
   return db;
@@ -197,6 +220,33 @@ const buildSaleResponse = (row) => {
     status_css_class: statusCssClass,
     data_formatada: formatDate(row.created_at)
   };
+};
+
+const normalizeAttendantCode = (code) => {
+  if (!code && code !== 0) {
+    return null;
+  }
+
+  const trimmed = String(code).trim();
+  return trimmed ? trimmed.toLowerCase() : null;
+};
+
+const convertCentsToNumber = (value) => {
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) {
+    return 0;
+  }
+
+  return numeric / 100;
+};
+
+const roundCurrency = (value) => {
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) {
+    return 0;
+  }
+
+  return Number(numeric.toFixed(2));
 };
 
 const createApp = (options = {}) => {
@@ -352,6 +402,264 @@ const createApp = (options = {}) => {
       }
 
       return res.json(sales);
+    });
+  });
+
+  app.post('/api/attendants', (req, res) => {
+    const { name, code } = req.body || {};
+
+    const normalizedCode = normalizeAttendantCode(code);
+    if (!normalizedCode || normalizedCode.length !== 4) {
+      return res.status(400).json({ message: 'code must contain exactly 4 characters.' });
+    }
+
+    const trimmedName = typeof name === 'string' ? name.trim() : '';
+    if (!trimmedName) {
+      return res.status(400).json({ message: 'name is required.' });
+    }
+
+    const insertQuery = `INSERT INTO attendants (code, name) VALUES (?, ?)`;
+    db.run(insertQuery, [normalizedCode, trimmedName], (error) => {
+      if (error) {
+        if (error.message && error.message.toLowerCase().includes('unique')) {
+          return res.status(409).json({ message: 'Attendant code already exists.' });
+        }
+
+        console.error('Failed to create attendant', error);
+        return res.status(500).json({ message: 'Failed to create attendant.' });
+      }
+
+      return res.status(201).json({ code: normalizedCode, name: trimmedName });
+    });
+  });
+
+  app.get('/api/attendants', (req, res) => {
+    const query = 'SELECT code, name FROM attendants ORDER BY name COLLATE NOCASE';
+    db.all(query, [], (error, rows) => {
+      if (error) {
+        console.error('Failed to fetch attendants', error);
+        return res.status(500).json({ message: 'Failed to fetch attendants.' });
+      }
+
+      return res.json(rows || []);
+    });
+  });
+
+  app.put('/api/sales/:transactionId/attendant', (req, res) => {
+    const { transactionId } = req.params;
+    const { attendant_code: bodyCode } = req.body || {};
+
+    if (!transactionId) {
+      return res.status(400).json({ message: 'transactionId is required.' });
+    }
+
+    const normalizedCode = normalizeAttendantCode(bodyCode);
+    if (!normalizedCode) {
+      return res.status(400).json({ message: 'attendant_code is required.' });
+    }
+
+    const defaultAttendant = { code: 'nao_definido', name: 'Não Definido' };
+
+    const updateSale = (attendant) => {
+      const selectedAttendant = attendant || defaultAttendant;
+
+      const updateQuery = `
+        UPDATE sales
+        SET attendant_code = ?, attendant_name = ?
+        WHERE transaction_id = ?
+      `;
+
+      db.run(
+        updateQuery,
+        [selectedAttendant.code, selectedAttendant.name, transactionId],
+        function (error) {
+          if (error) {
+            console.error('Failed to update attendant for sale', error);
+            return res.status(500).json({ message: 'Failed to assign attendant.' });
+          }
+
+          if (this.changes === 0) {
+            return res.status(404).json({ message: 'Sale not found.' });
+          }
+
+          db.get(
+            `SELECT * FROM sales WHERE transaction_id = ?`,
+            [transactionId],
+            (selectError, row) => {
+              if (selectError) {
+                console.error('Failed to load updated sale', selectError);
+                return res.status(500).json({ message: 'Failed to load updated sale.' });
+              }
+
+              return res.json(buildSaleResponse(row));
+            }
+          );
+        }
+      );
+    };
+
+    if (normalizedCode === defaultAttendant.code) {
+      return updateSale(defaultAttendant);
+    }
+
+    db.get(
+      `SELECT code, name FROM attendants WHERE code = ?`,
+      [normalizedCode],
+      (error, attendant) => {
+        if (error) {
+          console.error('Failed to fetch attendant', error);
+          return res.status(500).json({ message: 'Failed to fetch attendant.' });
+        }
+
+        if (!attendant) {
+          return res.status(404).json({ message: 'Attendant not found.' });
+        }
+
+        return updateSale(attendant);
+      }
+    );
+  });
+
+  app.get('/api/settings', (req, res) => {
+    db.get(
+      `SELECT user_name AS userName, user_email AS userEmail, monthly_investment AS monthlyInvestment FROM settings WHERE id = 1`,
+      (error, row) => {
+        if (error) {
+          console.error('Failed to load settings', error);
+          return res.status(500).json({ message: 'Failed to load settings.' });
+        }
+
+        if (!row) {
+          return res.json({
+            userName: DEFAULT_SETTINGS.user_name,
+            userEmail: DEFAULT_SETTINGS.user_email,
+            monthlyInvestment: DEFAULT_SETTINGS.monthly_investment
+          });
+        }
+
+        return res.json({
+          userName: row.userName ?? DEFAULT_SETTINGS.user_name,
+          userEmail: row.userEmail ?? DEFAULT_SETTINGS.user_email,
+          monthlyInvestment: row.monthlyInvestment ?? DEFAULT_SETTINGS.monthly_investment
+        });
+      }
+    );
+  });
+
+  app.put('/api/settings', (req, res) => {
+    const { userName, userEmail, monthlyInvestment } = req.body || {};
+
+    const preparedName = typeof userName === 'string' ? userName.trim() : DEFAULT_SETTINGS.user_name;
+    const preparedEmail = typeof userEmail === 'string' ? userEmail.trim() : DEFAULT_SETTINGS.user_email;
+    const preparedInvestment = Number(monthlyInvestment);
+
+    const investmentValue = Number.isFinite(preparedInvestment) ? preparedInvestment : DEFAULT_SETTINGS.monthly_investment;
+
+    db.run(
+      `INSERT OR REPLACE INTO settings (id, user_name, user_email, monthly_investment) VALUES (1, ?, ?, ?)`,
+      [preparedName, preparedEmail, investmentValue],
+      (error) => {
+        if (error) {
+          console.error('Failed to save settings', error);
+          return res.status(500).json({ message: 'Failed to save settings.' });
+        }
+
+        return res.json({
+          userName: preparedName,
+          userEmail: preparedEmail,
+          monthlyInvestment: investmentValue
+        });
+      }
+    );
+  });
+
+  app.get('/api/summary', (req, res) => {
+    const { period = 'this_month', attendant } = req.query || {};
+
+    const conditions = [];
+    const params = [];
+
+    if (period === 'this_month') {
+      conditions.push("strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')");
+    } else if (req.query.startDate && req.query.endDate) {
+      conditions.push('datetime(created_at) >= datetime(?)');
+      conditions.push('datetime(created_at) <= datetime(?)');
+      params.push(req.query.startDate, req.query.endDate);
+    }
+
+    const normalizedAttendant = normalizeAttendantCode(attendant);
+    if (normalizedAttendant && normalizedAttendant !== 'todos') {
+      conditions.push('lower(attendant_code) = ?');
+      params.push(normalizedAttendant);
+    }
+
+    const query = `
+      SELECT transaction_id, status_code, status_text, total_value_cents, created_at, attendant_code
+      FROM sales
+      ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
+    `;
+
+    db.all(query, params, (error, rows) => {
+      if (error) {
+        console.error('Failed to build summary', error);
+        return res.status(500).json({ message: 'Failed to build summary.' });
+      }
+
+      db.get(
+        `SELECT monthly_investment FROM settings WHERE id = 1`,
+        (settingsError, settingsRow) => {
+          if (settingsError) {
+            console.error('Failed to load settings for summary', settingsError);
+            return res.status(500).json({ message: 'Failed to load settings for summary.' });
+          }
+
+          const sales = (rows || []).map((row) => ({
+            ...row,
+            status_css_class: resolveStatusClass(row.status_text, row.status_code)
+          }));
+
+          const sumByStatus = (status) =>
+            sales
+              .filter((sale) => sale.status_css_class === status)
+              .reduce((total, sale) => total + convertCentsToNumber(sale.total_value_cents), 0);
+
+          const agendadoMes = sumByStatus('agendado');
+          const pagoDoAgendado = sumByStatus('pago');
+          const frustradoAgendado = sumByStatus('frustrado');
+          const aReceberAgendado = agendadoMes - pagoDoAgendado;
+          const vendasDiretas = 0;
+
+          const investimentoTotal = roundCurrency(
+            settingsRow?.monthly_investment ?? DEFAULT_SETTINGS.monthly_investment
+          );
+          const lucroMes = roundCurrency(pagoDoAgendado + vendasDiretas - investimentoTotal);
+          const roi = investimentoTotal
+            ? roundCurrency((lucroMes / investimentoTotal) * 100)
+            : 0;
+
+          return res.json({
+            agendadoMes: roundCurrency(agendadoMes),
+            pagoDoAgendado: roundCurrency(pagoDoAgendado),
+            aReceberAgendado: roundCurrency(aReceberAgendado),
+            frustradoAgendado: roundCurrency(frustradoAgendado),
+            vendasDiretas: roundCurrency(vendasDiretas),
+            investimentoTotal,
+            lucroMes,
+            roi,
+            graficoFunil: [
+              roundCurrency(agendadoMes),
+              roundCurrency(pagoDoAgendado),
+              roundCurrency(aReceberAgendado),
+              roundCurrency(frustradoAgendado)
+            ],
+            graficoComposicao: [
+              roundCurrency(pagoDoAgendado),
+              roundCurrency(aReceberAgendado),
+              roundCurrency(frustradoAgendado)
+            ]
+          });
+        }
+      );
     });
   });
 

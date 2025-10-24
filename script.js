@@ -375,14 +375,22 @@ function displaySettings(settings) {
     const emailInput = document.getElementById('config-email');
     const investimentoInput = document.getElementById('config-investimento');
 
+    const nome = settings.name ?? settings.nome ?? settings.userName ?? '';
+    const email = settings.email ?? settings.userEmail ?? '';
+    const investimento =
+        settings.investment ??
+        settings.monthlyInvestment ??
+        settings.investimento ??
+        0;
+
     if (nomeInput) {
-        nomeInput.value = settings.name || settings.nome || '';
+        nomeInput.value = nome;
     }
     if (emailInput) {
-        emailInput.value = settings.email || '';
+        emailInput.value = email;
     }
     if (investimentoInput) {
-        investimentoInput.value = settings.investment || settings.investimento || '';
+        investimentoInput.value = investimento;
     }
 }
 

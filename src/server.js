@@ -7,22 +7,47 @@ const fs = require('fs');
 const defaultDatabasePath =
   process.env.SQLITE_DB_PATH || path.join(__dirname, '..', 'data', 'sales.sqlite');
 
+const DEFAULT_ATTENDANT = { code: 'nao_definido', name: 'Não Definido' };
+
 const attendantsRegistry = [
-  { code: 'nao_definido', name: 'Não Definido' },
-  { code: 'j1.12', name: 'João' },
-  { code: 'm2.34', name: 'Maria' },
-  { code: 'paul', name: 'Paulo' },
+  DEFAULT_ATTENDANT,
   { code: 'joao', name: 'João' },
-  { code: 'mari', name: 'Maria' }
+  { code: 'mari', name: 'Maria' },
+  { code: 'paul', name: 'Paulo' },
+  { code: 'anap', name: 'Ana' },
+  { code: 'pdrs', name: 'Pedro' }
 ];
 
-const attendantsMap = attendantsRegistry.reduce((map, attendant) => {
-  if (attendant?.code) {
-    map.set(attendant.code.toLowerCase(), {
-      code: attendant.code,
-      name: attendant.name
-    });
+const normalizeAttendantCode = (code) => {
+  if (!code && code !== 0) {
+    return null;
   }
+
+  const trimmed = String(code).trim().toLowerCase();
+  return trimmed ? trimmed : null;
+};
+
+const isDefaultAttendantCode = (code) => normalizeAttendantCode(code) === DEFAULT_ATTENDANT.code;
+
+const isValidAttendantCode = (code) => /^[a-z0-9]{4}$/i.test(code);
+
+const attendantsMap = attendantsRegistry.reduce((map, attendant) => {
+  const normalizedCode = normalizeAttendantCode(attendant?.code);
+  const trimmedName = typeof attendant?.name === 'string' ? attendant.name.trim() : '';
+
+  if (!normalizedCode || !trimmedName) {
+    return map;
+  }
+
+  if (!isDefaultAttendantCode(normalizedCode) && !isValidAttendantCode(normalizedCode)) {
+    return map;
+  }
+
+  map.set(normalizedCode, {
+    code: normalizedCode,
+    name: trimmedName
+  });
+
   return map;
 }, new Map());
 
@@ -43,6 +68,35 @@ const DEFAULT_SETTINGS = {
   user_name: '',
   user_email: '',
   monthly_investment: 0
+};
+
+const mapSettingsResponse = (row = {}) => {
+  const userName = row.userName ?? row.user_name ?? DEFAULT_SETTINGS.user_name;
+  const userEmail = row.userEmail ?? row.user_email ?? DEFAULT_SETTINGS.user_email;
+  const monthlyInvestment = row.monthlyInvestment ?? row.monthly_investment ?? DEFAULT_SETTINGS.monthly_investment;
+
+  return {
+    name: userName,
+    email: userEmail,
+    investment: Number(monthlyInvestment) || 0,
+    userName,
+    userEmail,
+    monthlyInvestment: Number(monthlyInvestment) || 0
+  };
+};
+
+const resolvePostbackUrl = (req, options = {}) => {
+  if (options.postbackUrl) {
+    return options.postbackUrl;
+  }
+
+  if (process.env.POSTBACK_URL) {
+    return process.env.POSTBACK_URL;
+  }
+
+  const hostHeader = req.get('host') || 'localhost:3001';
+  const protocol = req.protocol || 'http';
+  return `${protocol}://${hostHeader}/api/postback`;
 };
 
 const initializeDatabase = (databasePath = defaultDatabasePath) => {
@@ -99,9 +153,18 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
       const normalizedCode = normalizeAttendantCode(attendant?.code);
       const trimmedName = typeof attendant?.name === 'string' ? attendant.name.trim() : '';
 
-      if (normalizedCode && trimmedName) {
-        seedStatement.run(normalizedCode, trimmedName);
+      if (!normalizedCode || !trimmedName) {
+        return;
       }
+
+      if (
+        !isDefaultAttendantCode(normalizedCode) &&
+        !isValidAttendantCode(normalizedCode)
+      ) {
+        return;
+      }
+
+      seedStatement.run(normalizedCode, trimmedName);
     });
 
     seedStatement.finalize();
@@ -230,21 +293,12 @@ const buildSaleResponse = (row) => {
 
   return {
     ...row,
-    attendant_code: row.attendant_code || 'nao_definido',
-    attendant_name: row.attendant_name || 'Não Definido',
+    attendant_code: row.attendant_code || DEFAULT_ATTENDANT.code,
+    attendant_name: row.attendant_name || DEFAULT_ATTENDANT.name,
     valor_formatado: formatCurrency(row.total_value_cents),
     status_css_class: statusCssClass,
     data_formatada: formatDate(row.created_at)
   };
-};
-
-const normalizeAttendantCode = (code) => {
-  if (!code && code !== 0) {
-    return null;
-  }
-
-  const trimmed = String(code).trim();
-  return trimmed ? trimmed.toLowerCase() : null;
 };
 
 const convertCentsToNumber = (value) => {
@@ -272,6 +326,11 @@ const createApp = (options = {}) => {
   app.use(cors());
   app.use(express.json());
 
+  app.get('/api/postback-url', (req, res) => {
+    const url = resolvePostbackUrl(req, options);
+    return res.json({ url });
+  });
+
   app.post('/api/postback', (req, res) => {
     const payload = req.body || {};
     const transactionId = payload.transaction_id;
@@ -292,8 +351,8 @@ const createApp = (options = {}) => {
       created_at: payload.created_at || now,
       updated_at: payload.updated_at || now,
       raw_payload: JSON.stringify(payload),
-      attendant_code: attendant?.code || 'nao_definido',
-      attendant_name: attendant?.name || 'Não Definido'
+      attendant_code: attendant?.code || DEFAULT_ATTENDANT.code,
+      attendant_name: attendant?.name || DEFAULT_ATTENDANT.name
     };
 
     const upsertQuery = `
@@ -425,8 +484,12 @@ const createApp = (options = {}) => {
     const { name, code } = req.body || {};
 
     const normalizedCode = normalizeAttendantCode(code);
-    if (!normalizedCode || normalizedCode.length !== 4) {
-      return res.status(400).json({ message: 'code must contain exactly 4 characters.' });
+    if (isDefaultAttendantCode(normalizedCode)) {
+      return res.status(400).json({ message: 'code is reserved for the default attendant.' });
+    }
+
+    if (!normalizedCode || !isValidAttendantCode(normalizedCode)) {
+      return res.status(400).json({ message: 'code must contain exactly 4 alphanumeric characters.' });
     }
 
     const trimmedName = typeof name === 'string' ? name.trim() : '';
@@ -457,7 +520,46 @@ const createApp = (options = {}) => {
         return res.status(500).json({ message: 'Failed to fetch attendants.' });
       }
 
-      return res.json(rows || []);
+      const uniqueAttendants = new Map();
+      let defaultAttendantRow = null;
+
+      (rows || []).forEach((row) => {
+        const normalizedCode = normalizeAttendantCode(row?.code);
+        const trimmedName = typeof row?.name === 'string' ? row.name.trim() : '';
+
+        if (!normalizedCode || !trimmedName) {
+          return;
+        }
+
+        if (isDefaultAttendantCode(normalizedCode)) {
+          if (!defaultAttendantRow) {
+            defaultAttendantRow = { code: DEFAULT_ATTENDANT.code, name: DEFAULT_ATTENDANT.name };
+          }
+          return;
+        }
+
+        if (!isValidAttendantCode(normalizedCode)) {
+          return;
+        }
+
+        if (!uniqueAttendants.has(normalizedCode)) {
+          uniqueAttendants.set(normalizedCode, {
+            code: normalizedCode,
+            name: trimmedName
+          });
+        }
+      });
+
+      const sortedAttendants = Array.from(uniqueAttendants.values()).sort((a, b) =>
+        a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+      );
+
+      const responsePayload = [
+        defaultAttendantRow || { ...DEFAULT_ATTENDANT },
+        ...sortedAttendants
+      ];
+
+      return res.json(responsePayload);
     });
   });
 
@@ -474,7 +576,7 @@ const createApp = (options = {}) => {
       return res.status(400).json({ message: 'attendant_code is required.' });
     }
 
-    const defaultAttendant = { code: 'nao_definido', name: 'Não Definido' };
+    const defaultAttendant = { ...DEFAULT_ATTENDANT };
 
     const updateSale = (attendant) => {
       const selectedAttendant = attendant || defaultAttendant;
@@ -546,30 +648,29 @@ const createApp = (options = {}) => {
         }
 
         if (!row) {
-          return res.json({
-            userName: DEFAULT_SETTINGS.user_name,
-            userEmail: DEFAULT_SETTINGS.user_email,
-            monthlyInvestment: DEFAULT_SETTINGS.monthly_investment
-          });
+          return res.json(mapSettingsResponse());
         }
 
-        return res.json({
-          userName: row.userName ?? DEFAULT_SETTINGS.user_name,
-          userEmail: row.userEmail ?? DEFAULT_SETTINGS.user_email,
-          monthlyInvestment: row.monthlyInvestment ?? DEFAULT_SETTINGS.monthly_investment
-        });
+        return res.json(mapSettingsResponse(row));
       }
     );
   });
 
   app.put('/api/settings', (req, res) => {
-    const { userName, userEmail, monthlyInvestment } = req.body || {};
+    const body = req.body || {};
 
-    const preparedName = typeof userName === 'string' ? userName.trim() : DEFAULT_SETTINGS.user_name;
-    const preparedEmail = typeof userEmail === 'string' ? userEmail.trim() : DEFAULT_SETTINGS.user_email;
-    const preparedInvestment = Number(monthlyInvestment);
+    const rawName = typeof body.name === 'string' ? body.name : body.userName;
+    const rawEmail = typeof body.email === 'string' ? body.email : body.userEmail;
+    const rawInvestment =
+      body.investment !== undefined ? body.investment : body.monthlyInvestment;
 
-    const investmentValue = Number.isFinite(preparedInvestment) ? preparedInvestment : DEFAULT_SETTINGS.monthly_investment;
+    const preparedName = typeof rawName === 'string' ? rawName.trim() : DEFAULT_SETTINGS.user_name;
+    const preparedEmail = typeof rawEmail === 'string' ? rawEmail.trim() : DEFAULT_SETTINGS.user_email;
+
+    const numericInvestment = Number(rawInvestment);
+    const investmentValue = Number.isFinite(numericInvestment)
+      ? numericInvestment
+      : DEFAULT_SETTINGS.monthly_investment;
 
     db.run(
       `INSERT OR REPLACE INTO settings (id, user_name, user_email, monthly_investment) VALUES (1, ?, ?, ?)`,
@@ -580,11 +681,13 @@ const createApp = (options = {}) => {
           return res.status(500).json({ message: 'Failed to save settings.' });
         }
 
-        return res.json({
-          userName: preparedName,
-          userEmail: preparedEmail,
-          monthlyInvestment: investmentValue
-        });
+        return res.json(
+          mapSettingsResponse({
+            userName: preparedName,
+            userEmail: preparedEmail,
+            monthlyInvestment: investmentValue
+          })
+        );
       }
     );
   });
@@ -653,26 +756,29 @@ const createApp = (options = {}) => {
             ? roundCurrency((lucroMes / investimentoTotal) * 100)
             : 0;
 
+          const agendadoTotal = roundCurrency(agendadoMes);
+          const pagoTotal = roundCurrency(pagoDoAgendado);
+          const aReceberTotal = roundCurrency(aReceberAgendado);
+          const frustradoTotal = roundCurrency(frustradoAgendado);
+          const vendasDiretasTotal = roundCurrency(vendasDiretas);
+
           return res.json({
-            agendadoMes: roundCurrency(agendadoMes),
-            pagoDoAgendado: roundCurrency(pagoDoAgendado),
-            aReceberAgendado: roundCurrency(aReceberAgendado),
-            frustradoAgendado: roundCurrency(frustradoAgendado),
-            vendasDiretas: roundCurrency(vendasDiretas),
-            investimentoTotal,
-            lucroMes,
+            agendado: agendadoTotal,
+            pago: pagoTotal,
+            aReceber: aReceberTotal,
+            frustrado: frustradoTotal,
+            vendasDiretas: vendasDiretasTotal,
+            investimento: investimentoTotal,
+            lucro: lucroMes,
             roi,
-            graficoFunil: [
-              roundCurrency(agendadoMes),
-              roundCurrency(pagoDoAgendado),
-              roundCurrency(aReceberAgendado),
-              roundCurrency(frustradoAgendado)
-            ],
-            graficoComposicao: [
-              roundCurrency(pagoDoAgendado),
-              roundCurrency(aReceberAgendado),
-              roundCurrency(frustradoAgendado)
-            ]
+            graficoFunil: [agendadoTotal, pagoTotal, aReceberTotal, frustradoTotal],
+            graficoComposicao: [pagoTotal, aReceberTotal, frustradoTotal],
+            agendadoMes: agendadoTotal,
+            pagoDoAgendado: pagoTotal,
+            aReceberAgendado: aReceberTotal,
+            frustradoAgendado: frustradoTotal,
+            investimentoTotal,
+            lucroMes
           });
         }
       );

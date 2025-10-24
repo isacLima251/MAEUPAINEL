@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { createApp, attendantsRegistry } = require('../src/server');
+const { createApp } = require('../src/server');
 
 const setupApp = () => {
   const { app, db } = createApp({ databasePath: ':memory:' });
@@ -125,6 +125,16 @@ test('POST /api/attendants requires a 4-character code', { concurrency: 1 }, asy
 test('POST /api/postback identifies attendant from email prefix', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
+  const attendantCreateResponse = await request(app)
+    .post('/api/attendants')
+    .send({ name: 'João', code: 'joao', monthlyCost: 150 });
+  assert.equal(attendantCreateResponse.statusCode, 201);
+  assert.deepEqual(attendantCreateResponse.body, {
+    code: 'joao',
+    name: 'João',
+    monthlyCost: 150
+  });
+
   const payload = {
     transaction_id: 'with-attendant',
     status_code: 3,
@@ -221,6 +231,11 @@ test('PUT /api/sales/:transactionId/status validates status values', { concurren
 test('GET /api/sales applies filters for status, attendant and search', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
+  await request(app)
+    .post('/api/attendants')
+    .send({ name: 'João', code: 'joao', monthlyCost: 150 });
+  await request(app).post('/api/attendants').send({ name: 'Maria', code: 'mari' });
+
   const salesPayloads = [
     {
       transaction_id: 'tx-paid',
@@ -289,9 +304,9 @@ test('POST /api/attendants creates a new attendant and GET lists it', { concurre
 
   const createResponse = await request(app)
     .post('/api/attendants')
-    .send({ name: 'João', code: 'joia' });
+    .send({ name: 'João', code: 'joia', monthlyCost: 250.75 });
   assert.equal(createResponse.statusCode, 201);
-  assert.deepEqual(createResponse.body, { code: 'joia', name: 'João' });
+  assert.deepEqual(createResponse.body, { code: 'joia', name: 'João', monthlyCost: 250.75 });
 
   const duplicateResponse = await request(app)
     .post('/api/attendants')
@@ -300,23 +315,44 @@ test('POST /api/attendants creates a new attendant and GET lists it', { concurre
 
   const listResponse = await request(app).get('/api/attendants');
   assert.equal(listResponse.statusCode, 200);
-  const createdAttendant = listResponse.body.find((item) => item.code === 'joia');
-  assert.ok(createdAttendant, 'Created attendant should be present in attendants list');
-  assert.equal(createdAttendant.name, 'João');
+  assert.deepEqual(listResponse.body, [{ code: 'joia', name: 'João', monthlyCost: 250.75 }]);
 
   await closeDatabase(db);
 });
 
-test('GET /api/attendants returns default attendants when database is empty', { concurrency: 1 }, async () => {
+test('GET /api/attendants returns an empty list when database is empty', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
   const response = await request(app).get('/api/attendants');
   assert.equal(response.statusCode, 200);
-  assert.ok(Array.isArray(response.body));
-  assert.ok(response.body.length >= attendantsRegistry.length);
+  assert.deepEqual(response.body, []);
 
-  const defaultAttendant = response.body.find((item) => item.code === 'nao_definido');
-  assert.deepEqual(defaultAttendant, { code: 'nao_definido', name: 'Não Definido' });
+  await closeDatabase(db);
+});
+
+test('PUT and DELETE /api/attendants update and remove attendants', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  await request(app)
+    .post('/api/attendants')
+    .send({ name: 'João', code: 'joia', monthlyCost: 100 });
+
+  const updateResponse = await request(app)
+    .put('/api/attendants/joia')
+    .send({ name: 'Joana', newCode: 'joab', monthlyCost: 150.5 });
+  assert.equal(updateResponse.statusCode, 200);
+  assert.deepEqual(updateResponse.body, { code: 'joab', name: 'Joana', monthlyCost: 150.5 });
+
+  const listResponse = await request(app).get('/api/attendants');
+  assert.equal(listResponse.statusCode, 200);
+  assert.deepEqual(listResponse.body, [{ code: 'joab', name: 'Joana', monthlyCost: 150.5 }]);
+
+  const deleteResponse = await request(app).delete('/api/attendants/joab');
+  assert.equal(deleteResponse.statusCode, 204);
+
+  const listAfterDelete = await request(app).get('/api/attendants');
+  assert.equal(listAfterDelete.statusCode, 200);
+  assert.deepEqual(listAfterDelete.body, []);
 
   await closeDatabase(db);
 });
@@ -324,7 +360,15 @@ test('GET /api/attendants returns default attendants when database is empty', { 
 test('PUT /api/sales/:transactionId/attendant assigns and clears an attendant', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
-  await request(app).post('/api/attendants').send({ name: 'João', code: 'joao' });
+  const attendantCreateResponse = await request(app)
+    .post('/api/attendants')
+    .send({ name: 'João', code: 'joao', monthlyCost: 150 });
+  assert.equal(attendantCreateResponse.statusCode, 201);
+  assert.deepEqual(attendantCreateResponse.body, {
+    code: 'joao',
+    name: 'João',
+    monthlyCost: 150
+  });
 
   const salePayload = {
     transaction_id: 'assign-1',
@@ -407,7 +451,15 @@ test('GET /api/summary aggregates sales data for the current month and attendant
     monthlyInvestment: 200
   });
 
-  await request(app).post('/api/attendants').send({ name: 'João', code: 'joao' });
+  const attendantCreateResponse = await request(app)
+    .post('/api/attendants')
+    .send({ name: 'João', code: 'joao', monthlyCost: 150 });
+  assert.equal(attendantCreateResponse.statusCode, 201);
+  assert.deepEqual(attendantCreateResponse.body, {
+    code: 'joao',
+    name: 'João',
+    monthlyCost: 150
+  });
 
   const salesPayloads = [
     {
@@ -451,6 +503,10 @@ test('GET /api/summary aggregates sales data for the current month and attendant
     .put('/api/sales/sum-pago/attendant')
     .send({ attendant_code: 'joao' });
 
+  const attendantsList = await request(app).get('/api/attendants');
+  assert.equal(attendantsList.statusCode, 200);
+  assert.deepEqual(attendantsList.body, [{ code: 'joao', name: 'João', monthlyCost: 150 }]);
+
   const summaryResponse = await request(app).get('/api/summary');
   assert.equal(summaryResponse.statusCode, 200);
   assert.deepEqual(summaryResponse.body, {
@@ -482,17 +538,17 @@ test('GET /api/summary aggregates sales data for the current month and attendant
     aReceber: -300,
     frustrado: 0,
     vendasDiretas: 0,
-    investimento: 200,
-    lucro: 100,
-    roi: 50,
+    investimento: 150,
+    lucro: 150,
+    roi: 100,
     graficoFunil: [0, 300, -300, 0],
     graficoComposicao: [300, -300, 0],
     agendadoMes: 0,
     pagoDoAgendado: 300,
     aReceberAgendado: -300,
     frustradoAgendado: 0,
-    investimentoTotal: 200,
-    lucroMes: 100
+    investimentoTotal: 150,
+    lucroMes: 150
   });
 
   await closeDatabase(db);

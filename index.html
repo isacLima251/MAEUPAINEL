@@ -23,7 +23,7 @@
     <div class="main-content">
         <header class="main-header">
             <h2 id="main-page-title">Visão Geral do Resumo</h2>
-            <div class="user-info"><span>Olá, [Teu Nome]</span><i class="fas fa-user-circle"></i></div>
+            <div class="user-info"><i class="fas fa-user-circle"></i></div>
         </header>
         
         <div class="content-area">
@@ -90,15 +90,19 @@
                     <div class="integration-box"><h3 class="integration-title">Configuração de Postback (Braip)</h3><p class="integration-description">Este é o seu URL de Postback único. Copie este link e cole-o na secção "Postback" dentro das configurações do seu produto na Braip.</p><div class="postback-url-container"><input type="text" value="" id="postback-url" readonly><button class="action-button" id="copy-url-btn"><i class="fas fa-copy"></i> Copiar</button></div></div>
                 <div class="integration-box"><h3 class="integration-title">Como Configurar na Braip</h3><p class="integration-description">Siga estes passos para que a Braip envie as atualizações de status automaticamente para o seu painel.</p><ol class="instructions-list"><li>Aceda à sua conta da Braip.</li><li>Vá para "Produtos" e selecione o produto que deseja integrar.</li><li>No menu lateral do produto, procure por "Configurações" e depois "Postback".</li><li>Cole o URL acima no campo "URL de Postback".</li><li>Na secção "Eventos", selecione **todos** os status que deseja acompanhar. O nosso painel usa principalmente estes:<ul class="event-list"><li><i class="fas fa-check"></i> Pagamento Aprovado</li><li><i class="fas fa-check"></i> Agendado</li><li><i class="fas fa-check"></i> Frustrada</li><li><i class="fas fa-check"></i> Cancelada</li><li><i class="fas fa-check"></i> Devolvida</li><li><i class="fas fa-check"></i> Chargeback</li></ul></li><li>Salve as alterações. A partir desse momento, as novas vendas e atualizações de status aparecerão automaticamente no seu painel.</li></ol></div>
             </div> <div class="page" id="page-configuracao">
-                <div class="config-box"><h3 class="config-title">Perfil de Utilizador</h3><div class="form-group"><label for="config-nome" class="form-label">Nome:</label><input type="text" id="config-nome" class="form-input" value=""></div><div class="form-group"><label for="config-email" class="form-label">Email:</label><input type="email" id="config-email" class="form-input" value=""></div><hr class="form-divider"><h3 class="config-title">Gerenciar Atendentes</h3>
-                    
+                <div class="config-box"><h3 class="config-title">Gerenciar Atendentes</h3>
+
                     <div class="add-attendant-form">
                         <div class="form-group inline"> <label for="add-attendant-name" class="form-label">Nome:</label>
                             <input type="text" id="add-attendant-name" class="form-input" placeholder="Ex: João Silva">
                         </div>
                         <div class="form-group inline">
                             <label for="add-attendant-code" class="form-label">Código (4 chars):</label>
-                            <input type="text" id="add-attendant-code" class="form-input" placeholder="Ex: J1.12" maxlength="4">
+                            <input type="text" id="add-attendant-code" class="form-input" placeholder="Ex: ABCD" maxlength="4">
+                        </div>
+                        <div class="form-group inline">
+                            <label for="add-attendant-cost" class="form-label">Gasto Mensal (R$):</label>
+                            <input type="number" id="add-attendant-cost" class="form-input" placeholder="Ex: 500.00" value="0">
                         </div>
                         <button class="action-button add-btn" id="add-attendant-btn">
                             <i class="fas fa-plus"></i> Adicionar
@@ -112,6 +116,8 @@
                                 <tr>
                                     <th>Nome</th>
                                     <th>Código</th>
+                                    <th>Gasto Mensal</th>
+                                    <th>Ações</th>
                                     </tr>
                             </thead>
                             <tbody id="attendants-table-body">

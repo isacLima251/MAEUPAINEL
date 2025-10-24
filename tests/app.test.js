@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { createApp } = require('../src/server');
+const { createApp, attendantsRegistry } = require('../src/server');
 
 const setupApp = () => {
   const { app, db } = createApp({ databasePath: ':memory:' });
@@ -180,19 +180,34 @@ test('POST /api/attendants creates a new attendant and GET lists it', { concurre
 
   const createResponse = await request(app)
     .post('/api/attendants')
-    .send({ name: 'João', code: 'joao' });
+    .send({ name: 'João', code: 'joia' });
   assert.equal(createResponse.statusCode, 201);
-  assert.deepEqual(createResponse.body, { code: 'joao', name: 'João' });
+  assert.deepEqual(createResponse.body, { code: 'joia', name: 'João' });
 
   const duplicateResponse = await request(app)
     .post('/api/attendants')
-    .send({ name: 'Outro João', code: 'joao' });
+    .send({ name: 'Outro João', code: 'joia' });
   assert.equal(duplicateResponse.statusCode, 409);
 
   const listResponse = await request(app).get('/api/attendants');
   assert.equal(listResponse.statusCode, 200);
-  assert.equal(listResponse.body.length, 1);
-  assert.deepEqual(listResponse.body[0], { code: 'joao', name: 'João' });
+  const createdAttendant = listResponse.body.find((item) => item.code === 'joia');
+  assert.ok(createdAttendant, 'Created attendant should be present in attendants list');
+  assert.equal(createdAttendant.name, 'João');
+
+  await closeDatabase(db);
+});
+
+test('GET /api/attendants returns default attendants when database is empty', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  const response = await request(app).get('/api/attendants');
+  assert.equal(response.statusCode, 200);
+  assert.ok(Array.isArray(response.body));
+  assert.ok(response.body.length >= attendantsRegistry.length);
+
+  const defaultAttendant = response.body.find((item) => item.code === 'nao_definido');
+  assert.deepEqual(defaultAttendant, { code: 'nao_definido', name: 'Não Definido' });
 
   await closeDatabase(db);
 });

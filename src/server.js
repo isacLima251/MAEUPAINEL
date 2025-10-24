@@ -8,6 +8,7 @@ const defaultDatabasePath =
   process.env.SQLITE_DB_PATH || path.join(__dirname, '..', 'data', 'sales.sqlite');
 
 const attendantsRegistry = [
+  { code: 'nao_definido', name: 'Não Definido' },
   { code: 'j1.12', name: 'João' },
   { code: 'm2.34', name: 'Maria' },
   { code: 'paul', name: 'Paulo' },
@@ -89,6 +90,21 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
         name TEXT NOT NULL
       )`
     );
+
+    const seedStatement = db.prepare(
+      `INSERT OR IGNORE INTO attendants (code, name) VALUES (?, ?)`
+    );
+
+    attendantsRegistry.forEach((attendant) => {
+      const normalizedCode = normalizeAttendantCode(attendant?.code);
+      const trimmedName = typeof attendant?.name === 'string' ? attendant.name.trim() : '';
+
+      if (normalizedCode && trimmedName) {
+        seedStatement.run(normalizedCode, trimmedName);
+      }
+    });
+
+    seedStatement.finalize();
 
     db.run(
       `CREATE TABLE IF NOT EXISTS settings (
@@ -668,7 +684,8 @@ const createApp = (options = {}) => {
 
 module.exports = {
   createApp,
-  initializeDatabase
+  initializeDatabase,
+  attendantsRegistry
 };
 
 if (require.main === module) {

@@ -278,7 +278,22 @@ async function loadAttendants() {
     try {
         const attendants = await fetchJson('/attendants');
         if (Array.isArray(attendants)) {
-            listaAtendentes = attendants;
+            const sanitizedAttendants = attendants
+                .filter((attendant) => attendant && attendant.code && attendant.name)
+                .map((attendant) => ({
+                    code: String(attendant.code),
+                    name: String(attendant.name)
+                }));
+
+            const hasDefault = sanitizedAttendants.some(
+                (attendant) => attendant.code === 'nao_definido'
+            );
+
+            if (!hasDefault) {
+                sanitizedAttendants.unshift({ code: 'nao_definido', name: 'Não Definido' });
+            }
+
+            listaAtendentes = sanitizedAttendants;
             populateAttendantDropdowns();
         } else {
             throw new Error('Formato inválido de atendentes.');
@@ -286,7 +301,7 @@ async function loadAttendants() {
     } catch (error) {
         console.error('Erro ao carregar atendentes:', error);
         alert('Não foi possível carregar a lista de atendentes.');
-        listaAtendentes = [];
+        listaAtendentes = [{ code: 'nao_definido', name: 'Não Definido' }];
         populateAttendantDropdowns();
     }
 }

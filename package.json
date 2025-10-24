@@ -1,0 +1,24 @@
+{
+  "name": "maeupainel-backend",
+  "version": "1.0.0",
+  "description": "Backend server for MAEU Painel Braip integrations.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node -e \"console.log('No automated tests configured for the backend yet.')\""
+  },
+  "keywords": [
+    "braip",
+    "sales",
+    "postback",
+    "backend"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "sqlite3": "^5.1.7"
+  }
+}

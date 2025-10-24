@@ -1,0 +1,877 @@
+/* Reset básico e Definições Globais */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+body {
+    display: flex; /* Coloca o menu e o conteúdo lado a lado */
+    background-color: #1e1e2d; /* Cor de fundo principal (escuro) */
+    color: #e0e0e0; /* Cor do texto principal (claro) */
+}
+
+a {
+    text-decoration: none;
+    color: inherit; /* Links herdam a cor do texto */
+}
+
+ul {
+    list-style: none; /* Remove bolinhas das listas */
+}
+
+/* 1. Estilos do Menu Lateral (Sidebar) */
+.sidebar {
+    width: 250px; /* Largura do menu */
+    height: 100vh; /* Altura total da janela */
+    background-color: #27293d; /* Cor de fundo do menu (um pouco mais claro) */
+    padding: 20px;
+    position: fixed; /* Fica fixo no lugar ao rolar */
+    top: 0;
+    left: 0;
+}
+
+.sidebar-header h3 {
+    color: #ffffff;
+    font-size: 24px;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.sidebar-menu .menu-item {
+    margin-bottom: 15px;
+}
+
+.sidebar-menu .menu-item a {
+    display: flex; /* Coloca ícone e texto lado a lado */
+    align-items: center;
+    padding: 12px 15px;
+    border-radius: 8px;
+    transition: background-color 0.3s ease;
+}
+
+.sidebar-menu .menu-item a i {
+    margin-right: 15px; /* Espaço entre ícone e texto */
+    font-size: 18px;
+}
+
+.sidebar-menu .menu-item a span {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.sidebar-menu .menu-item:not(.active):hover a {
+    background-color: #3a3b52;
+}
+
+.sidebar-menu .menu-item.active a {
+    background-color: #5d5fef; /* Cor de destaque (azul/roxo) */
+    color: #ffffff;
+}
+
+/* 2. Estilos do Conteúdo Principal */
+.main-content {
+    flex-grow: 1; /* Ocupa o resto do espaço */
+    margin-left: 250px; /* Deixa espaço para o menu lateral fixo */
+    padding: 20px;
+}
+
+.main-header {
+    display: flex;
+    justify-content: space-between; /* Título à esquerda, usuário à direita */
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #3a3b52;
+    margin-bottom: 20px;
+}
+
+.main-header h2 {
+    color: #ffffff;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+}
+
+.user-info span {
+    margin-right: 10px;
+}
+
+.user-info i {
+    font-size: 24px;
+}
+
+.content-area {
+    padding: 10px;
+}
+
+/* 3. Estilos dos Cards de Resumo */
+.cards-container {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 30px;
+}
+
+.card {
+    /* Esta é a correção:
+      Vamos definir uma "base" de largura para cada card.
+      Queremos 4 cards por linha (25% cada).
+      Calculamos 25% - (o espaço do 'gap' de 20px distribuído).
+      O 'flex-basis' força o card a ter esta largura base, 
+      forçando a quebra para a linha seguinte após o 4º card.
+    */
+    flex-basis: calc(25% - 15px);
+    flex-grow: 1; /* Permite crescer se houver espaço */
+    flex-shrink: 1; /* Permite encolher se necessário */
+    min-width: 220px; /* Ainda garante uma largura mínima em telas pequenas */
+
+    /* O resto do estilo (display, padding, etc.) é o mesmo de antes */
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    background-color: #27293d; 
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); 
+}
+
+
+.card-icon {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 24px;
+    margin-right: 20px;
+    color: #ffffff;
+}
+
+.card-icon.blue { background-color: #5d5fef; }
+.card-icon.green { background-color: #00d285; }
+.card-icon.red { background-color: #ff5b5b; }
+.card-icon.yellow { background-color: #ffb822; }
+.card-icon.orange { background-color: #f39c12; } /* Um tom de laranja */
+
+.card-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.card-title {
+    font-size: 14px;
+    color: #a0a0a0;
+    margin-bottom: 5px;
+}
+
+.card-value {
+    font-size: 22px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+/* 4. Estilos da Tabela de Vendas */
+.table-container {
+    width: 100%;
+    background-color: #27293d;
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.table-title {
+    color: #ffffff;
+    font-size: 20px;
+    margin-bottom: 20px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table thead tr th {
+    text-align: left;
+    padding: 15px;
+    color: #a0a0a0;
+    font-size: 14px;
+    text-transform: uppercase;
+    border-bottom: 2px solid #3a3b52;
+}
+
+table tbody tr td {
+    padding: 15px;
+    border-bottom: 1px solid #3a3b52;
+    color: #e0e0e0;
+    vertical-align: middle;
+}
+
+table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.status {
+    padding: 5px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+.status.pago { background-color: #00d285; }
+.status.agendado { background-color: #5d5fef; }
+.status.frustrado { background-color: #ff5b5b; }
+.status.cobranca { background-color: #ffb822; }
+
+.action-button {
+    background-color: #5d5fef;
+    color: #ffffff;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+}
+
+.action-button:hover {
+    background-color: #4a4cdb;
+}
+
+/* 5. Estilos da Barra de Filtros (ESTA PARTE FALTAVA) */
+
+.filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    background-color: #27293d;
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    gap: 15px;
+}
+
+.filter-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.filter-btn {
+    padding: 8px 15px;
+    border: 1px solid #3a3b52;
+    background-color: transparent;
+    color: #a0a0a0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.filter-btn:hover,
+.filter-btn.active {
+    background-color: #5d5fef;
+    color: #ffffff;
+    border-color: #5d5fef;
+}
+
+.filter-custom-date {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter-custom-date label,
+.filter-custom-date span {
+    font-size: 14px;
+    color: #a0a0a0;
+}
+
+.filter-custom-date input[type="date"] {
+    background-color: #1e1e2d;
+    color: #e0e0e0;
+    border: 1px solid #3a3b52;
+    border-radius: 6px;
+    padding: 6px 10px;
+    color-scheme: dark;
+}
+
+.filter-apply-btn {
+    background-color: #00d285;
+    color: #ffffff;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+}
+
+.filter-apply-btn:hover {
+    background-color: #00b975;
+}
+
+
+/* 6. Estilos da Janela Modal (Pop-up) */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.modal-overlay.active {
+    visibility: visible;
+    opacity: 1;
+}
+
+.modal-content {
+    background-color: #27293d;
+    padding: 30px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.active .modal-content {
+    transform: scale(1);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #3a3b52;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+.modal-header h3 {
+    color: #ffffff;
+    font-size: 22px;
+}
+
+.modal-close-btn {
+    background: transparent;
+    border: none;
+    color: #a0a0a0;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.modal-close-btn:hover {
+    color: #ffffff;
+}
+
+.modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.detalhe-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    font-size: 16px;
+}
+
+.detalhe-item strong {
+    color: #a0a0a0;
+    margin-right: 10px;
+}
+
+.detalhe-item span {
+    color: #ffffff;
+    font-weight: 500;
+    text-align: right;
+}
+
+.detalhe-item .status {
+    font-size: 14px;
+}
+
+.modal-body hr {
+    border: none;
+    border-top: 1px solid #3a3b52;
+    margin: 15px 0;
+}
+
+.modal-body h4 {
+    color: #ffffff;
+    font-size: 18px;
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+.historico-lista {
+    list-style: disc;
+    padding-left: 20px;
+    color: #e0e0e0;
+}
+
+.historico-lista li {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+/* 7. Estilos de Navegação de Página (SPA) */
+
+.page {
+    display: none; /* Esconde todas as páginas por defeito */
+}
+
+.page.active {
+    display: block; /* Mostra apenas a página que tem a classe "active" */
+}
+
+/* 8. Estilos dos Gráficos (Chart.js) */
+
+.charts-container {
+    display: flex; /* Coloca os gráficos lado a lado */
+    gap: 20px; /* Espaço entre os gráficos */
+    flex-wrap: wrap; /* Permite quebrar a linha em telas pequenas */
+    margin-top: 30px; /* Espaço acima dos gráficos */
+}
+
+.chart-box {
+    /* Esta é a correção para o tamanho: */
+    flex-basis: calc(50% - 10px); /* Força 2 colunas (50% - metade do gap de 20px) */
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 300px; /* Em telas pequenas, ele vai quebrar a linha (wrap) */
+    
+    background-color: #27293d; /* Fundo escuro (igual aos cards) */
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+
+    /* Esta é a correção para a altura: */
+    max-height: 400px; /* Podes ajustar este valor */
+    position: relative; 
+}
+
+.chart-title {
+    color: #ffffff;
+    font-size: 18px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+/* Esta é a correção para o canvas */
+canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* 9. Estilos dos Filtros da Página de Vendas */
+
+.search-box {
+    display: flex;
+    align-items: center;
+    background-color: #1e1e2d; /* Fundo escuro (igual ao body) */
+    border: 1px solid #3a3b52;
+    border-radius: 6px;
+    padding: 0 10px;
+    flex-grow: 1; /* Faz a barra de pesquisa crescer e ocupar espaço */
+    max-width: 400px; /* Limita a largura máxima */
+}
+
+.search-box i {
+    color: #a0a0a0;
+    margin-right: 10px;
+}
+
+.search-box input[type="text"] {
+    background-color: transparent;
+    border: none;
+    color: #e0e0e0;
+    padding: 10px 5px;
+    font-size: 14px;
+    width: 100%;
+}
+
+.search-box input[type="text"]:focus {
+    outline: none; /* Remove a borda azul ao clicar */
+}
+
+.filter-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter-status label {
+    font-size: 14px;
+    color: #a0a0a0;
+}
+
+/* Estilizando o <select> para o tema escuro */
+.filter-status select {
+    background-color: #1e1e2d;
+    color: #e0e0e0;
+    border: 1px solid #3a3b52;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.filter-status select:focus {
+    outline: none;
+    border-color: #5d5fef;
+}
+
+/* 10. Estilos do Resumo de Vendas (Página Vendas) */
+
+.sales-summary-bar {
+    display: flex;
+    gap: 20px; /* Espaço entre os mini-cards */
+    margin-bottom: 20px; /* Espaço antes da tabela */
+    flex-wrap: wrap;
+}
+
+.summary-card {
+    flex: 1; /* Ocupa o espaço disponível */
+    min-width: 200px; /* Largura mínima */
+    background-color: #27293d; /* Fundo escuro */
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.summary-title {
+    display: block;
+    font-size: 14px;
+    color: #a0a0a0; /* Cinza claro */
+    margin-bottom: 8px;
+}
+
+.summary-value {
+    display: block;
+    font-size: 24px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+/* Cor especial para o valor total */
+#sales-total-value {
+    color: #00d285; /* Verde */
+}
+
+
+/* 11. Estilos da Página de Integração */
+
+.integration-box {
+    background-color: #27293d; /* Fundo escuro */
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    
+    /* Correção para centrar e limitar largura */
+    max-width: 800px; 
+    margin: 0 auto 25px auto; /* Centrado com margem inferior de 25px */
+}
+
+.integration-title {
+    color: #ffffff;
+    font-size: 20px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #3a3b52;
+    padding-bottom: 10px;
+}
+
+.integration-description {
+    font-size: 15px;
+    color: #a0a0a0;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+.postback-url-container {
+    display: flex;
+    gap: 10px; /* Espaço entre o input e o botão */
+}
+
+.postback-url-container input[type="text"] {
+    /* Correção para o input crescer flexivelmente */
+    flex: 1; 
+    background-color: #1e1e2d;
+    border: 1px solid #3a3b52;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 14px;
+    padding: 12px 15px;
+    font-family: 'Courier New', Courier, monospace; /* Fonte mono-espaçada para URLs */
+}
+
+/* Correção para o botão não encolher */
+.postback-url-container .action-button {
+    flex-shrink: 0; 
+}
+
+/* Garante que o ícone fica alinhado no botão Copiar */
+.action-button i {
+    margin-right: 5px;
+}
+
+/* Estilo da lista de instruções (mantém o mesmo) */
+.instructions-list {
+    list-style-type: decimal; 
+    list-style-position: inside; 
+    color: #e0e0e0;
+    font-size: 15px;
+    line-height: 2; 
+}
+
+.instructions-list li {
+    margin-bottom: 5px;
+}
+
+/* Estilos da Sub-lista de Eventos (pertencem à Seção 12, mas podem ficar aqui ou separados) */
+/* Se ainda não os adicionaste, adiciona-os */
+.event-list {
+    list-style: none; /* Remove as bolinhas da lista */
+    margin-top: 15px; /* Espaço acima da sub-lista */
+    margin-left: 10px; /* Pequeno recuo */
+    padding-left: 0;
+}
+
+.event-list li {
+    color: #c0c0c0; /* Um tom de cinza mais claro */
+    margin-bottom: 8px;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.event-list li i {
+    color: #00d285; /* Ícone de check verde */
+    margin-right: 12px;
+    font-size: 14px;
+    width: 15px; /* Alinhamento do ícone */
+}
+
+/* 12. Estilos da Sub-lista de Eventos (Página Integração) */
+
+.event-list {
+    list-style: none; /* Remove as bolinhas da lista */
+    margin-top: 15px; /* Espaço acima da sub-lista */
+    margin-left: 10px; /* Pequeno recuo */
+    padding-left: 0;
+}
+
+.event-list li {
+    color: #c0c0c0; /* Um tom de cinza mais claro */
+    margin-bottom: 8px;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.event-list li i {
+    color: #00d285; /* Ícone de check verde */
+    margin-right: 12px;
+    font-size: 14px;
+    width: 15px; /* Alinhamento do ícone */
+}
+
+/* 13. Estilos da Página de Configuração */
+
+/* Usamos o mesmo estilo da caixa de integração */
+.config-box {
+    background-color: #27293d;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    max-width: 800px; /* Limita a largura do formulário */
+    margin: 0 auto; /* Centra a caixa na página */
+}
+
+.config-title {
+    color: #ffffff;
+    font-size: 20px;
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 25px;
+}
+
+.form-label {
+    display: block;
+    color: #a0a0a0;
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px 15px;
+    background-color: #1e1e2d;
+    border: 1px solid #3a3b52;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 15px;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #5d5fef; /* Destaque azul ao clicar */
+}
+
+.form-hint {
+    font-size: 13px;
+    color: #a0a0a0;
+    margin-top: 8px;
+}
+
+.form-divider {
+    border: none;
+    border-top: 1px solid #3a3b52;
+    margin: 30px 0;
+}
+
+/* Estilo do Botão Salvar (mudando a cor) */
+.save-btn {
+    background-color: #00d285; /* Verde */
+    width: 100%; /* Faz o botão ocupar a largura total */
+    padding-top: 12px;
+    padding-bottom: 12px;
+    font-size: 16px;
+}
+
+.save-btn:hover {
+    background-color: #00b975; /* Verde mais escuro */
+}
+
+/* 14. Estilo do Grupo de Filtro Select (Página Vendas) */
+
+.filter-select-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter-select-group label {
+    font-size: 14px;
+    color: #a0a0a0;
+    white-space: nowrap; /* Evita que o texto quebre a linha */
+}
+
+/* Reutiliza o estilo do select que já tínhamos */
+.filter-select-group select {
+    background-color: #1e1e2d;
+    color: #e0e0e0;
+    border: 1px solid #3a3b52;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.filter-select-group select:focus {
+    outline: none;
+    border-color: #5d5fef;
+}
+
+/* 15. Ajustes para Edição do Atendente na Modal */
+
+/* Garante que o select dentro da modal tenha tamanho e espaçamento adequados */
+#modal-atendente-select {
+    padding: 5px 10px; /* Menor que os inputs normais de formulário */
+    font-size: 15px;
+    margin-left: 10px; /* Espaço entre "Atendente:" e o select */
+}
+
+/* Opcional: Adiciona um cursor de ponteiro ao span quando ele é exibido */
+#modal-atendente-display {
+     font-weight: bold; /* Destaca o nome do atendente */
+}
+
+/* 16. Estilos da Secção "Gerenciar Atendentes" (Página Configuração) */
+
+.add-attendant-form {
+    display: flex;
+    align-items: flex-end; /* Alinha os itens pela base */
+    gap: 15px; /* Espaço entre os elementos */
+    flex-wrap: wrap; /* Permite quebrar linha em telas menores */
+    margin-bottom: 30px; /* Espaço antes da tabela */
+}
+
+/* Ajusta os grupos inline para ocuparem espaço */
+.add-attendant-form .form-group.inline {
+    flex: 1; /* Faz os campos crescerem */
+    min-width: 200px; /* Largura mínima antes de quebrar */
+    margin-bottom: 0; /* Remove margem inferior padrão do form-group */
+}
+
+/* Estilo específico para o botão Adicionar */
+.add-btn {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    /* Remove a cor verde do .save-btn se aplicável, volta ao azul */
+    background-color: #5d5fef; 
+    flex-shrink: 0; /* Impede o botão de encolher */
+}
+.add-btn:hover {
+     background-color: #4a4cdb;
+}
+
+
+/* Estilos para a Tabela de Atendentes */
+.attendants-table-container {
+    margin-top: 20px;
+}
+
+.table-subtitle {
+    color: #e0e0e0;
+    font-size: 16px;
+    margin-bottom: 15px;
+}
+
+/* Reutiliza estilos de tabela que já temos, mas dentro da config-box */
+.config-box table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px; /* Espaço abaixo da tabela */
+}
+
+.config-box table thead th {
+    text-align: left;
+    padding: 12px 15px;
+    color: #a0a0a0;
+    font-size: 13px;
+    text-transform: uppercase;
+    border-bottom: 2px solid #3a3b52;
+}
+
+.config-box table tbody td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #3a3b52;
+    color: #e0e0e0;
+    font-size: 14px;
+}
+
+.config-box table tbody tr:last-child td {
+    border-bottom: none;
+}

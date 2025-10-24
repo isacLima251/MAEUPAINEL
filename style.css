@@ -420,6 +420,43 @@ table tbody tr:last-child td {
     margin-bottom: 10px;
 }
 
+/* Estilos para Ações Manuais na Modal */
+.modal-manual-actions {
+    margin-top: 25px;
+    padding-top: 15px;
+    border-top: 1px solid #3a3b52;
+    text-align: center;
+}
+
+.modal-manual-actions p {
+    color: #a0a0a0;
+    font-size: 14px;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+.manual-status-btn {
+    margin: 5px;
+    width: auto;
+    padding: 10px 20px;
+}
+
+.green-btn {
+    background-color: #00d285;
+}
+
+.green-btn:hover {
+    background-color: #00b975;
+}
+
+.red-btn {
+    background-color: #ff5b5b;
+}
+
+.red-btn:hover {
+    background-color: #e44b4b;
+}
+
 .historico-lista {
     list-style: disc;
     padding-left: 20px;

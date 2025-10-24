@@ -21,6 +21,8 @@ let modalData = null;
 let modalHistorico = null;
 let modalAtendenteDisplay = null;
 let modalAtendenteSelect = null;
+let manualStatusButtons = [];
+let modalCurrentTransactionIdInput = null;
 
 const periodButtonMap = {
     'este mês': 'this_month',
@@ -63,6 +65,10 @@ function cacheDomElements() {
     modalHistorico = document.getElementById('modal-historico');
     modalAtendenteDisplay = document.getElementById('modal-atendente-display');
     modalAtendenteSelect = document.getElementById('modal-atendente-select');
+    manualStatusButtons = Array.from(document.querySelectorAll('.manual-status-btn'));
+    modalCurrentTransactionIdInput = document.getElementById('modal-current-transaction-id');
+
+    bindManualStatusButtons();
 }
 
 async function initData() {
@@ -163,6 +169,17 @@ function setupModal() {
     if (modalCloseButton) {
         modalCloseButton.addEventListener('click', fecharModal);
     }
+}
+
+function bindManualStatusButtons() {
+    if (!manualStatusButtons || manualStatusButtons.length === 0) {
+        manualStatusButtons = Array.from(document.querySelectorAll('.manual-status-btn'));
+    }
+
+    manualStatusButtons.forEach((button) => {
+        button.removeEventListener('click', handleManualStatusUpdate);
+        button.addEventListener('click', handleManualStatusUpdate);
+    });
 }
 
 function setupEventListeners() {
@@ -669,6 +686,12 @@ function abrirModal(event) {
     const atendenteNome = linhaTabela.dataset.atendenteNome || obterNomeAtendente(atendenteCodigo) || '';
     const transactionId = linhaTabela.dataset.id || '';
 
+    if (modalCurrentTransactionIdInput) {
+        modalCurrentTransactionIdInput.value = transactionId;
+    }
+
+    bindManualStatusButtons();
+
     if (modalCliente) modalCliente.textContent = cliente;
     if (modalEmail) modalEmail.textContent = email;
     if (modalTelefone) modalTelefone.textContent = telefone;
@@ -745,6 +768,41 @@ async function handleAttendantChange(event) {
     }
 }
 
+async function handleManualStatusUpdate(event) {
+    event.preventDefault();
+
+    const button = event.currentTarget;
+    const novoStatus = button?.dataset?.status;
+    const transactionId = modalCurrentTransactionIdInput ? modalCurrentTransactionIdInput.value : '';
+
+    if (!novoStatus) {
+        alert('Selecione um status válido.');
+        return;
+    }
+
+    if (!transactionId) {
+        alert('Venda não encontrada.');
+        return;
+    }
+
+    try {
+        await fetchJson(`/sales/${transactionId}/status`, {
+            method: 'PUT',
+            body: { status: novoStatus }
+        });
+
+        alert('Status atualizado com sucesso!');
+        fecharModal();
+
+        const currentFilters = getCurrentSalesFilters();
+        await loadSalesData(currentFilters);
+        await updateSummaryData();
+    } catch (error) {
+        console.error('Erro ao atualizar status da venda:', error);
+        alert('Não foi possível atualizar o status da venda.');
+    }
+}
+
 async function addAttendantToTable(event) {
     event.preventDefault();
 
@@ -812,16 +870,7 @@ async function saveSettings(event) {
 }
 
 async function filterSalesTable() {
-    const salesSearchInput = document.getElementById('sales-search');
-    const salesStatusSelect = document.getElementById('salesStatusSelect') || document.getElementById('status-select');
-    const salesAttendantSelect = document.getElementById('sales-attendant-select') || document.getElementById('attendant-select');
-
-    const filters = {
-        search: salesSearchInput ? salesSearchInput.value.trim() : '',
-        status: salesStatusSelect ? salesStatusSelect.value : 'todos',
-        attendant: salesAttendantSelect ? salesAttendantSelect.value : 'todos'
-    };
-
+    const filters = getCurrentSalesFilters();
     await loadSalesData(filters);
 }
 
@@ -852,6 +901,18 @@ function formatDate(value) {
         return value;
     }
     return date.toLocaleDateString('pt-BR');
+}
+
+function getCurrentSalesFilters() {
+    const salesSearchInput = document.getElementById('sales-search');
+    const salesStatusSelect = document.getElementById('salesStatusSelect') || document.getElementById('status-select');
+    const salesAttendantSelect = document.getElementById('sales-attendant-select') || document.getElementById('attendant-select');
+
+    return {
+        search: salesSearchInput ? salesSearchInput.value.trim() : '',
+        status: salesStatusSelect ? salesStatusSelect.value : 'todos',
+        attendant: salesAttendantSelect ? salesAttendantSelect.value : 'todos'
+    };
 }
 
 function toNumericValue(value) {

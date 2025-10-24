@@ -70,6 +70,11 @@ const DEFAULT_SETTINGS = {
   monthly_investment: 0
 };
 
+const MANUAL_STATUS_MAP = {
+  pago: { code: 3, text: 'Pago' },
+  frustrado: { code: 5, text: 'Frustrado' }
+};
+
 const mapSettingsResponse = (row = {}) => {
   const userName = row.userName ?? row.user_name ?? DEFAULT_SETTINGS.user_name;
   const userEmail = row.userEmail ?? row.user_email ?? DEFAULT_SETTINGS.user_email;
@@ -499,6 +504,68 @@ const createApp = (options = {}) => {
 
       return res.json(sales);
     });
+  });
+
+  app.put('/api/sales/:transactionId/status', (req, res) => {
+    const { transactionId } = req.params || {};
+    const { status } = req.body || {};
+
+    if (!transactionId) {
+      return res.status(400).json({ message: 'transactionId is required.' });
+    }
+
+    const normalizedStatus = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    const statusInfo = MANUAL_STATUS_MAP[normalizedStatus];
+
+    if (!statusInfo) {
+      return res.status(400).json({ message: 'status must be either "pago" or "frustrado".' });
+    }
+
+    const updatedAt = new Date().toISOString();
+
+    db.run(
+      `UPDATE sales SET status_code = ?, status_text = ?, updated_at = ? WHERE transaction_id = ?`,
+      [statusInfo.code, statusInfo.text, updatedAt, transactionId],
+      function (error) {
+        if (error) {
+          console.error('Failed to update sale status', error);
+          return res.status(500).json({ message: 'Failed to update sale status.' });
+        }
+
+        if (this.changes === 0) {
+          return res.status(404).json({ message: 'Sale not found.' });
+        }
+
+        db.get(
+          `SELECT
+            transaction_id,
+            status_code,
+            status_text,
+            client_email,
+            client_name,
+            client_cpf,
+            client_phone,
+            product_name,
+            total_value_cents,
+            created_at,
+            updated_at,
+            raw_payload,
+            attendant_code,
+            attendant_name
+          FROM sales
+          WHERE transaction_id = ?`,
+          [transactionId],
+          (selectError, row) => {
+            if (selectError) {
+              console.error('Failed to load updated sale', selectError);
+              return res.status(500).json({ message: 'Failed to load updated sale.' });
+            }
+
+            return res.json(buildSaleResponse(row));
+          }
+        );
+      }
+    );
   });
 
   app.post('/api/attendants', (req, res) => {

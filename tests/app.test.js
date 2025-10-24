@@ -151,6 +151,73 @@ test('POST /api/postback identifies attendant from email prefix', { concurrency:
   await closeDatabase(db);
 });
 
+test('PUT /api/sales/:transactionId/status updates sale status manually', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  const salePayload = {
+    transaction_id: 'manual-status-1',
+    status_code: 2,
+    status_text: 'Agendado',
+    client_email: 'cliente@example.com',
+    product_name: 'Produto Manual',
+    total_value_cents: 12345,
+    created_at: '2024-02-10 08:00:00',
+    updated_at: '2024-02-10 08:00:00'
+  };
+
+  const postResponse = await request(app).post('/api/postback').send(salePayload);
+  assert.equal(postResponse.statusCode, 201);
+
+  const updateResponse = await request(app)
+    .put('/api/sales/manual-status-1/status')
+    .send({ status: 'pago' });
+  assert.equal(updateResponse.statusCode, 200);
+  assert.equal(updateResponse.body.transaction_id, 'manual-status-1');
+  assert.equal(updateResponse.body.status_code, 3);
+  assert.equal(updateResponse.body.status_text, 'Pago');
+  assert.equal(updateResponse.body.status_css_class, 'pago');
+
+  const listResponse = await request(app).get('/api/sales');
+  assert.equal(listResponse.statusCode, 200);
+  const updatedSale = listResponse.body.find((sale) => sale.transaction_id === 'manual-status-1');
+  assert.ok(updatedSale, 'Updated sale should exist');
+  assert.equal(updatedSale.status_code, 3);
+  assert.equal(updatedSale.status_text, 'Pago');
+  assert.equal(updatedSale.status_css_class, 'pago');
+
+  await closeDatabase(db);
+});
+
+test('PUT /api/sales/:transactionId/status validates status values', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  const salePayload = {
+    transaction_id: 'manual-status-2',
+    status_code: 2,
+    status_text: 'Agendado',
+    client_email: 'cliente2@example.com',
+    product_name: 'Produto Manual 2',
+    total_value_cents: 54321,
+    created_at: '2024-02-11 08:00:00',
+    updated_at: '2024-02-11 08:00:00'
+  };
+
+  const postResponse = await request(app).post('/api/postback').send(salePayload);
+  assert.equal(postResponse.statusCode, 201);
+
+  const invalidResponse = await request(app)
+    .put('/api/sales/manual-status-2/status')
+    .send({ status: 'invalid' });
+  assert.equal(invalidResponse.statusCode, 400);
+
+  const notFoundResponse = await request(app)
+    .put('/api/sales/unknown-transaction/status')
+    .send({ status: 'pago' });
+  assert.equal(notFoundResponse.statusCode, 404);
+
+  await closeDatabase(db);
+});
+
 test('GET /api/sales applies filters for status, attendant and search', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 

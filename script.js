@@ -23,6 +23,8 @@ let modalAtendenteDisplay = null;
 let modalAtendenteSelect = null;
 let manualStatusButtons = [];
 let modalCurrentTransactionIdInput = null;
+let attendantsTableBodyEl = null;
+let attendantsTableData = [];
 
 const periodButtonMap = {
     'este mês': 'this_month',
@@ -67,6 +69,7 @@ function cacheDomElements() {
     modalAtendenteSelect = document.getElementById('modal-atendente-select');
     manualStatusButtons = Array.from(document.querySelectorAll('.manual-status-btn'));
     modalCurrentTransactionIdInput = document.getElementById('modal-current-transaction-id');
+    attendantsTableBodyEl = document.getElementById('attendants-table-body');
 
     bindManualStatusButtons();
 }
@@ -188,6 +191,7 @@ function setupEventListeners() {
     const salesAttendantSelect = document.getElementById('sales-attendant-select') || document.getElementById('attendant-select');
     const addAttendantBtn = document.getElementById('add-attendant-btn');
     const saveSettingsButton = document.getElementById('saveSettingsButton') || document.querySelector('.save-btn');
+    const attendantsTableBody = attendantsTableBodyEl;
 
     if (summaryAttendantSelect) {
         summaryAttendantSelect.addEventListener('change', updateSummaryData);
@@ -215,6 +219,10 @@ function setupEventListeners() {
 
     if (saveSettingsButton) {
         saveSettingsButton.addEventListener('click', saveSettings);
+    }
+
+    if (attendantsTableBody) {
+        attendantsTableBody.addEventListener('click', handleAttendantTableClick);
     }
 }
 
@@ -299,7 +307,8 @@ async function loadAttendants() {
                 .filter((attendant) => attendant && attendant.code && attendant.name)
                 .map((attendant) => ({
                     code: String(attendant.code),
-                    name: String(attendant.name)
+                    name: String(attendant.name),
+                    monthlyCost: Number(attendant.monthlyCost ?? attendant.monthly_cost ?? 0) || 0
                 }));
 
             const hasDefault = sanitizedAttendants.some(
@@ -307,7 +316,7 @@ async function loadAttendants() {
             );
 
             if (!hasDefault) {
-                sanitizedAttendants.unshift({ code: 'nao_definido', name: 'Não Definido' });
+                sanitizedAttendants.unshift({ code: 'nao_definido', name: 'Não Definido', monthlyCost: 0 });
             }
 
             listaAtendentes = sanitizedAttendants;
@@ -318,7 +327,7 @@ async function loadAttendants() {
     } catch (error) {
         console.error('Erro ao carregar atendentes:', error);
         alert('Não foi possível carregar a lista de atendentes.');
-        listaAtendentes = [{ code: 'nao_definido', name: 'Não Definido' }];
+        listaAtendentes = [{ code: 'nao_definido', name: 'Não Definido', monthlyCost: 0 }];
         populateAttendantDropdowns();
     }
 }
@@ -437,24 +446,66 @@ function displayPostbackUrl(data) {
 async function loadAttendantsTable() {
     try {
         const attendants = await fetchJson('/attendants');
-        const attendantsTableBody = document.getElementById('attendants-table-body');
-        if (!attendantsTableBody) {
+        if (!attendantsTableBodyEl) {
             return;
         }
-        attendantsTableBody.innerHTML = '';
-        attendants.forEach((attendant) => {
+        attendantsTableBodyEl.innerHTML = '';
+
+        const sanitizedAttendants = Array.isArray(attendants)
+            ? attendants
+                  .filter((attendant) => attendant && attendant.code && attendant.name)
+                  .map((attendant) => ({
+                      code: String(attendant.code),
+                      name: String(attendant.name),
+                      monthlyCost: Number(attendant.monthlyCost ?? attendant.monthly_cost ?? 0) || 0
+                  }))
+            : [];
+
+        attendantsTableData = sanitizedAttendants;
+
+        sanitizedAttendants.forEach((attendant) => {
             const row = document.createElement('tr');
+
             const nameCell = document.createElement('td');
+            nameCell.textContent = attendant.name;
+
             const codeCell = document.createElement('td');
-            nameCell.textContent = attendant.name || attendant.nome || '';
-            codeCell.textContent = attendant.code || attendant.id || '';
+            codeCell.textContent = attendant.code;
+
+            const costCell = document.createElement('td');
+            costCell.textContent = formatCurrencyBRL(attendant.monthlyCost);
+
+            const actionsCell = document.createElement('td');
+            actionsCell.classList.add('attendant-actions-cell');
+
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'table-icon-button edit-attendant-btn';
+            editButton.dataset.code = attendant.code;
+            editButton.title = 'Editar atendente';
+            editButton.innerHTML = '<i class="fas fa-edit"></i>';
+
+            const deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.className = 'table-icon-button delete-attendant-btn';
+            deleteButton.dataset.code = attendant.code;
+            deleteButton.title = 'Excluir atendente';
+            deleteButton.innerHTML = '<i class="fas fa-trash-alt"></i>';
+
+            actionsCell.appendChild(editButton);
+            actionsCell.appendChild(deleteButton);
+
             row.appendChild(nameCell);
             row.appendChild(codeCell);
-            attendantsTableBody.appendChild(row);
+            row.appendChild(costCell);
+            row.appendChild(actionsCell);
+
+            attendantsTableBodyEl.appendChild(row);
         });
     } catch (error) {
         console.error('Erro ao carregar tabela de atendentes:', error);
         alert('Não foi possível carregar a tabela de atendentes.');
+        attendantsTableData = [];
     }
 }
 
@@ -467,7 +518,7 @@ async function updateSummaryData() {
     if (period) {
         params.append('period', period);
     }
-    if (attendant && attendant !== 'todos') {
+    if (attendant !== undefined && attendant !== null && attendant !== '') {
         params.append('attendant', attendant);
     }
 
@@ -808,13 +859,15 @@ async function addAttendantToTable(event) {
 
     const attendantNameInput = document.getElementById('add-attendant-name');
     const attendantCodeInput = document.getElementById('add-attendant-code');
+    const attendantCostInput = document.getElementById('add-attendant-cost');
 
-    if (!attendantNameInput || !attendantCodeInput) {
+    if (!attendantNameInput || !attendantCodeInput || !attendantCostInput) {
         return;
     }
 
     const name = attendantNameInput.value.trim();
     const code = attendantCodeInput.value.trim();
+    const monthlyCostValue = Number(attendantCostInput.value || 0);
 
     if (!name || !code) {
         alert('Por favor, preencha o Nome e o Código do atendente.');
@@ -829,11 +882,12 @@ async function addAttendantToTable(event) {
     try {
         await fetchJson('/attendants', {
             method: 'POST',
-            body: { name, code }
+            body: { name, code, monthlyCost: Number.isFinite(monthlyCostValue) ? monthlyCostValue : 0 }
         });
 
         attendantNameInput.value = '';
         attendantCodeInput.value = '';
+        attendantCostInput.value = '0';
         await loadAttendants();
         await loadAttendantsTable();
         alert('Atendente adicionado com sucesso!');
@@ -851,10 +905,16 @@ async function saveSettings(event) {
     const investimentoInput = document.getElementById('config-investimento');
 
     const body = {
-        name: nomeInput ? nomeInput.value : '',
-        email: emailInput ? emailInput.value : '',
         investment: investimentoInput ? Number(investimentoInput.value || 0) : 0
     };
+
+    if (nomeInput) {
+        body.name = nomeInput.value;
+    }
+
+    if (emailInput) {
+        body.email = emailInput.value;
+    }
 
     try {
         await fetchJson('/settings', {
@@ -872,6 +932,104 @@ async function saveSettings(event) {
 async function filterSalesTable() {
     const filters = getCurrentSalesFilters();
     await loadSalesData(filters);
+}
+
+async function handleAttendantTableClick(event) {
+    const targetButton = event.target.closest('.edit-attendant-btn, .delete-attendant-btn');
+    if (!targetButton) {
+        return;
+    }
+
+    event.preventDefault();
+
+    const attendantCode = targetButton.dataset.code;
+    if (!attendantCode) {
+        return;
+    }
+
+    if (targetButton.classList.contains('edit-attendant-btn')) {
+        await handleEditAttendant(attendantCode);
+        return;
+    }
+
+    if (targetButton.classList.contains('delete-attendant-btn')) {
+        await handleDeleteAttendant(attendantCode);
+    }
+}
+
+async function handleEditAttendant(attendantCode) {
+    const attendant =
+        attendantsTableData.find((item) => item.code === attendantCode) ||
+        listaAtendentes.find((item) => item.code === attendantCode);
+
+    if (!attendant) {
+        alert('Não foi possível localizar o atendente selecionado.');
+        return;
+    }
+
+    const newNameInput = prompt('Nome do atendente:', attendant.name);
+    if (newNameInput === null) {
+        return;
+    }
+    const trimmedName = newNameInput.trim();
+    if (!trimmedName) {
+        alert('O nome do atendente não pode ficar vazio.');
+        return;
+    }
+
+    const newCodeInput = prompt('Código do atendente (4 caracteres):', attendant.code);
+    if (newCodeInput === null) {
+        return;
+    }
+    const preparedCode = newCodeInput.trim();
+    if (preparedCode.length !== 4) {
+        alert('O código deve ter exatamente 4 caracteres.');
+        return;
+    }
+
+    const newMonthlyCostInput = prompt('Gasto mensal (R$):', String(attendant.monthlyCost ?? 0));
+    if (newMonthlyCostInput === null) {
+        return;
+    }
+
+    const monthlyCostValue = toNumericValue(newMonthlyCostInput);
+
+    try {
+        await fetchJson(`/attendants/${encodeURIComponent(attendantCode)}`, {
+            method: 'PUT',
+            body: {
+                name: trimmedName,
+                newCode: preparedCode,
+                monthlyCost: Number.isFinite(monthlyCostValue) ? monthlyCostValue : 0
+            }
+        });
+
+        await loadAttendants();
+        await loadAttendantsTable();
+        alert('Atendente atualizado com sucesso!');
+    } catch (error) {
+        console.error('Erro ao atualizar atendente:', error);
+        alert('Não foi possível atualizar o atendente.');
+    }
+}
+
+async function handleDeleteAttendant(attendantCode) {
+    if (!confirm('Tem certeza de que deseja excluir este atendente?')) {
+        return;
+    }
+
+    try {
+        await fetchJson(`/attendants/${encodeURIComponent(attendantCode)}`, {
+            method: 'DELETE'
+        });
+
+        await loadAttendants();
+        await loadAttendantsTable();
+        alert('Atendente removido com sucesso!');
+    } catch (error) {
+        console.error('Erro ao remover atendente:', error);
+        alert('Não foi possível remover o atendente.');
+    }
 }
 
 function obterNomeAtendente(codigo) {
@@ -948,6 +1106,12 @@ function getSaleNumericValue(sale = {}) {
     }
 
     return 0;
+}
+
+function formatCurrencyBRL(value) {
+    const numeric = Number(value);
+    const safeValue = Number.isFinite(numeric) ? numeric : 0;
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeValue);
 }
 
 async function fetchJson(endpoint, options = {}) {

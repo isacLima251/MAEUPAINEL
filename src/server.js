@@ -9,14 +9,7 @@ const defaultDatabasePath =
 
 const DEFAULT_ATTENDANT = { code: 'nao_definido', name: 'Não Definido' };
 
-const attendantsRegistry = [
-  DEFAULT_ATTENDANT,
-  { code: 'joao', name: 'João' },
-  { code: 'mari', name: 'Maria' },
-  { code: 'paul', name: 'Paulo' },
-  { code: 'anap', name: 'Ana' },
-  { code: 'pdrs', name: 'Pedro' }
-];
+const attendantsRegistry = [DEFAULT_ATTENDANT];
 
 const normalizeAttendantCode = (code) => {
   if (!code && code !== 0) {
@@ -30,6 +23,15 @@ const normalizeAttendantCode = (code) => {
 const isDefaultAttendantCode = (code) => normalizeAttendantCode(code) === DEFAULT_ATTENDANT.code;
 
 const isValidAttendantCode = (code) => /^[a-z0-9]{4}$/i.test(code);
+
+const parseMonthlyCost = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return 0;
+  }
+
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
 
 const attendantsMap = attendantsRegistry.reduce((map, attendant) => {
   const normalizedCode = normalizeAttendantCode(attendant?.code);
@@ -152,33 +154,22 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
     db.run(
       `CREATE TABLE IF NOT EXISTS attendants (
         code TEXT PRIMARY KEY,
-        name TEXT NOT NULL
+        name TEXT NOT NULL,
+        monthly_cost REAL DEFAULT 0
       )`
     );
 
-    const seedStatement = db.prepare(
-      `INSERT OR IGNORE INTO attendants (code, name) VALUES (?, ?)`
-    );
-
-    attendantsRegistry.forEach((attendant) => {
-      const normalizedCode = normalizeAttendantCode(attendant?.code);
-      const trimmedName = typeof attendant?.name === 'string' ? attendant.name.trim() : '';
-
-      if (!normalizedCode || !trimmedName) {
+    db.all('PRAGMA table_info(attendants)', (attendantsError, columns) => {
+      if (attendantsError) {
+        console.error('Failed to inspect attendants table schema', attendantsError);
         return;
       }
 
-      if (
-        !isDefaultAttendantCode(normalizedCode) &&
-        !isValidAttendantCode(normalizedCode)
-      ) {
-        return;
+      const existingColumns = new Set((columns || []).map((column) => column.name));
+      if (!existingColumns.has('monthly_cost')) {
+        db.run('ALTER TABLE attendants ADD COLUMN monthly_cost REAL DEFAULT 0');
       }
-
-      seedStatement.run(normalizedCode, trimmedName);
     });
-
-    seedStatement.finalize();
 
     db.run(
       `CREATE TABLE IF NOT EXISTS settings (
@@ -194,25 +185,42 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
   return db;
 };
 
-const extractAttendantFromEmail = (email) => {
+const buildAttendantCodeCandidates = (email) => {
   if (!email || typeof email !== 'string') {
-    return null;
+    return [];
   }
 
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail) {
-    return null;
+    return [];
   }
 
   const candidateCodes = [];
 
+  const addCandidate = (value) => {
+    const normalizedCode = normalizeAttendantCode(value);
+    if (!normalizedCode) {
+      return;
+    }
+
+    if (!candidateCodes.includes(normalizedCode)) {
+      candidateCodes.push(normalizedCode);
+    }
+  };
+
   if (normalizedEmail.length >= 5) {
-    candidateCodes.push(normalizedEmail.slice(0, 5));
+    addCandidate(normalizedEmail.slice(0, 5));
   }
 
   if (normalizedEmail.length >= 4) {
-    candidateCodes.push(normalizedEmail.slice(0, 4));
+    addCandidate(normalizedEmail.slice(0, 4));
   }
+
+  return candidateCodes;
+};
+
+const extractAttendantFromEmail = (email) => {
+  const candidateCodes = buildAttendantCodeCandidates(email);
 
   for (const code of candidateCodes) {
     const attendant = attendantsMap.get(code);
@@ -222,6 +230,49 @@ const extractAttendantFromEmail = (email) => {
   }
 
   return null;
+};
+
+const findAttendantByCodeCandidates = (db, candidates, callback) => {
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    callback(null, null);
+    return;
+  }
+
+  const tryIndex = (index) => {
+    if (index >= candidates.length) {
+      callback(null, null);
+      return;
+    }
+
+    const candidate = candidates[index];
+    if (!candidate) {
+      tryIndex(index + 1);
+      return;
+    }
+
+    db.get(
+      `SELECT code, name FROM attendants WHERE lower(code) = ?`,
+      [candidate],
+      (error, row) => {
+        if (error) {
+          callback(error);
+          return;
+        }
+
+        if (row && row.code && row.name) {
+          callback(null, {
+            code: normalizeAttendantCode(row.code),
+            name: typeof row.name === 'string' ? row.name.trim() : row.name
+          });
+          return;
+        }
+
+        tryIndex(index + 1);
+      }
+    );
+  };
+
+  tryIndex(0);
 };
 
 const formatCurrency = (valueInCents) => {
@@ -351,81 +402,96 @@ const createApp = (options = {}) => {
     }
 
     const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    const attendant = extractAttendantFromEmail(payload.client_email);
-    const sale = {
-      transaction_id: String(transactionId),
-      status_code: payload.status_code ?? null,
-      status_text: payload.status_text ?? null,
-      client_email: payload.client_email ?? null,
-      client_name: payload.client_name ?? null,
-      client_cpf: payload.client_cpf ?? null,
-      client_phone: payload.client_phone ?? null,
-      product_name: payload.product_name ?? null,
-      total_value_cents: payload.total_value_cents ?? null,
-      created_at: payload.created_at || now,
-      updated_at: payload.updated_at || now,
-      raw_payload: JSON.stringify(payload),
-      attendant_code: attendant?.code || DEFAULT_ATTENDANT.code,
-      attendant_name: attendant?.name || DEFAULT_ATTENDANT.name
+    const candidateCodes = buildAttendantCodeCandidates(payload.client_email);
+
+    const finalize = (resolvedAttendant) => {
+      const fallbackAttendant =
+        extractAttendantFromEmail(payload.client_email) || DEFAULT_ATTENDANT;
+      const attendant = resolvedAttendant || fallbackAttendant || DEFAULT_ATTENDANT;
+
+      const sale = {
+        transaction_id: String(transactionId),
+        status_code: payload.status_code ?? null,
+        status_text: payload.status_text ?? null,
+        client_email: payload.client_email ?? null,
+        client_name: payload.client_name ?? null,
+        client_cpf: payload.client_cpf ?? null,
+        client_phone: payload.client_phone ?? null,
+        product_name: payload.product_name ?? null,
+        total_value_cents: payload.total_value_cents ?? null,
+        created_at: payload.created_at || now,
+        updated_at: payload.updated_at || now,
+        raw_payload: JSON.stringify(payload),
+        attendant_code: attendant.code || DEFAULT_ATTENDANT.code,
+        attendant_name: attendant.name || DEFAULT_ATTENDANT.name
+      };
+
+      const upsertQuery = `
+        INSERT INTO sales (
+          transaction_id,
+          status_code,
+          status_text,
+          client_email,
+          client_name,
+          client_cpf,
+          client_phone,
+          product_name,
+          total_value_cents,
+          created_at,
+          updated_at,
+          raw_payload,
+          attendant_code,
+          attendant_name
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(transaction_id) DO UPDATE SET
+          status_code = excluded.status_code,
+          status_text = excluded.status_text,
+          client_email = excluded.client_email,
+          client_name = excluded.client_name,
+          client_cpf = excluded.client_cpf,
+          client_phone = excluded.client_phone,
+          product_name = excluded.product_name,
+          total_value_cents = excluded.total_value_cents,
+          created_at = excluded.created_at,
+          updated_at = excluded.updated_at,
+          raw_payload = excluded.raw_payload,
+          attendant_code = excluded.attendant_code,
+          attendant_name = excluded.attendant_name
+      `;
+
+      const values = [
+        sale.transaction_id,
+        sale.status_code,
+        sale.status_text,
+        sale.client_email,
+        sale.client_name,
+        sale.client_cpf,
+        sale.client_phone,
+        sale.product_name,
+        sale.total_value_cents,
+        sale.created_at,
+        sale.updated_at,
+        sale.raw_payload,
+        sale.attendant_code,
+        sale.attendant_name
+      ];
+
+      db.run(upsertQuery, values, (error) => {
+        if (error) {
+          console.error('Failed to store sale', error);
+          return res.status(500).json({ message: 'Failed to store sale.' });
+        }
+
+        return res.status(201).json({ message: 'Sale stored successfully.' });
+      });
     };
 
-    const upsertQuery = `
-      INSERT INTO sales (
-        transaction_id,
-        status_code,
-        status_text,
-        client_email,
-        client_name,
-        client_cpf,
-        client_phone,
-        product_name,
-        total_value_cents,
-        created_at,
-        updated_at,
-        raw_payload,
-        attendant_code,
-        attendant_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(transaction_id) DO UPDATE SET
-        status_code = excluded.status_code,
-        status_text = excluded.status_text,
-        client_email = excluded.client_email,
-        client_name = excluded.client_name,
-        client_cpf = excluded.client_cpf,
-        client_phone = excluded.client_phone,
-        product_name = excluded.product_name,
-        total_value_cents = excluded.total_value_cents,
-        created_at = excluded.created_at,
-        updated_at = excluded.updated_at,
-        raw_payload = excluded.raw_payload,
-        attendant_code = excluded.attendant_code,
-        attendant_name = excluded.attendant_name
-    `;
-
-    const values = [
-      sale.transaction_id,
-      sale.status_code,
-      sale.status_text,
-      sale.client_email,
-      sale.client_name,
-      sale.client_cpf,
-      sale.client_phone,
-      sale.product_name,
-      sale.total_value_cents,
-      sale.created_at,
-      sale.updated_at,
-      sale.raw_payload,
-      sale.attendant_code,
-      sale.attendant_name
-    ];
-
-    db.run(upsertQuery, values, (error) => {
-      if (error) {
-        console.error('Failed to store sale', error);
-        return res.status(500).json({ message: 'Failed to store sale.' });
+    findAttendantByCodeCandidates(db, candidateCodes, (lookupError, attendant) => {
+      if (lookupError) {
+        console.error('Failed to resolve attendant from email', lookupError);
       }
 
-      return res.status(201).json({ message: 'Sale stored successfully.' });
+      finalize(attendant);
     });
   });
 
@@ -569,7 +635,7 @@ const createApp = (options = {}) => {
   });
 
   app.post('/api/attendants', (req, res) => {
-    const { name, code } = req.body || {};
+    const { name, code, monthlyCost } = req.body || {};
 
     const normalizedCode = normalizeAttendantCode(code);
     if (isDefaultAttendantCode(normalizedCode)) {
@@ -585,8 +651,10 @@ const createApp = (options = {}) => {
       return res.status(400).json({ message: 'name is required.' });
     }
 
-    const insertQuery = `INSERT INTO attendants (code, name) VALUES (?, ?)`;
-    db.run(insertQuery, [normalizedCode, trimmedName], (error) => {
+    const monthlyCostValue = parseMonthlyCost(monthlyCost);
+
+    const insertQuery = `INSERT INTO attendants (code, name, monthly_cost) VALUES (?, ?, ?)`;
+    db.run(insertQuery, [normalizedCode, trimmedName, monthlyCostValue], (error) => {
       if (error) {
         if (error.message && error.message.toLowerCase().includes('unique')) {
           return res.status(409).json({ message: 'Attendant code already exists.' });
@@ -596,59 +664,147 @@ const createApp = (options = {}) => {
         return res.status(500).json({ message: 'Failed to create attendant.' });
       }
 
-      return res.status(201).json({ code: normalizedCode, name: trimmedName });
+      return res.status(201).json({
+        code: normalizedCode,
+        name: trimmedName,
+        monthlyCost: monthlyCostValue
+      });
     });
   });
 
   app.get('/api/attendants', (req, res) => {
-    const query = 'SELECT code, name FROM attendants ORDER BY name COLLATE NOCASE';
+    const query = `
+      SELECT code, name, monthly_cost AS monthlyCost
+      FROM attendants
+      ORDER BY name COLLATE NOCASE
+    `;
     db.all(query, [], (error, rows) => {
       if (error) {
         console.error('Failed to fetch attendants', error);
         return res.status(500).json({ message: 'Failed to fetch attendants.' });
       }
 
-      const uniqueAttendants = new Map();
-      let defaultAttendantRow = null;
+      const responsePayload = (rows || [])
+        .map((row) => {
+          const normalizedCode = normalizeAttendantCode(row?.code);
+          const trimmedName = typeof row?.name === 'string' ? row.name.trim() : '';
 
-      (rows || []).forEach((row) => {
-        const normalizedCode = normalizeAttendantCode(row?.code);
-        const trimmedName = typeof row?.name === 'string' ? row.name.trim() : '';
-
-        if (!normalizedCode || !trimmedName) {
-          return;
-        }
-
-        if (isDefaultAttendantCode(normalizedCode)) {
-          if (!defaultAttendantRow) {
-            defaultAttendantRow = { code: DEFAULT_ATTENDANT.code, name: DEFAULT_ATTENDANT.name };
+          if (!normalizedCode || !trimmedName) {
+            return null;
           }
-          return;
-        }
 
-        if (!isValidAttendantCode(normalizedCode)) {
-          return;
-        }
+          if (!isValidAttendantCode(normalizedCode)) {
+            return null;
+          }
 
-        if (!uniqueAttendants.has(normalizedCode)) {
-          uniqueAttendants.set(normalizedCode, {
+          return {
             code: normalizedCode,
-            name: trimmedName
-          });
-        }
-      });
-
-      const sortedAttendants = Array.from(uniqueAttendants.values()).sort((a, b) =>
-        a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
-      );
-
-      const responsePayload = [
-        defaultAttendantRow || { ...DEFAULT_ATTENDANT },
-        ...sortedAttendants
-      ];
+            name: trimmedName,
+            monthlyCost: parseMonthlyCost(row?.monthlyCost)
+          };
+        })
+        .filter(Boolean);
 
       return res.json(responsePayload);
     });
+  });
+
+  app.put('/api/attendants/:code', (req, res) => {
+    const { code: routeCode } = req.params || {};
+    const { name, newCode, monthlyCost } = req.body || {};
+
+    const targetCode = normalizeAttendantCode(routeCode);
+    if (!targetCode || !isValidAttendantCode(targetCode)) {
+      return res.status(400).json({ message: 'A valid 4-character code is required in the route.' });
+    }
+
+    const trimmedName = typeof name === 'string' ? name.trim() : '';
+    if (!trimmedName) {
+      return res.status(400).json({ message: 'name is required.' });
+    }
+
+    const normalizedNewCode = newCode ? normalizeAttendantCode(newCode) : targetCode;
+    if (isDefaultAttendantCode(normalizedNewCode)) {
+      return res.status(400).json({ message: 'newCode is reserved for the default attendant.' });
+    }
+
+    if (!normalizedNewCode || !isValidAttendantCode(normalizedNewCode)) {
+      return res.status(400).json({ message: 'newCode must contain exactly 4 alphanumeric characters.' });
+    }
+
+    const monthlyCostValue = parseMonthlyCost(monthlyCost);
+
+    db.get(
+      `SELECT code FROM attendants WHERE lower(code) = ?`,
+      [targetCode],
+      (selectError, existingAttendant) => {
+        if (selectError) {
+          console.error('Failed to load attendant for update', selectError);
+          return res.status(500).json({ message: 'Failed to load attendant.' });
+        }
+
+        if (!existingAttendant) {
+          return res.status(404).json({ message: 'Attendant not found.' });
+        }
+
+        const updateQuery = `
+          UPDATE attendants
+          SET code = ?, name = ?, monthly_cost = ?
+          WHERE code = ?
+        `;
+
+        db.run(
+          updateQuery,
+          [normalizedNewCode, trimmedName, monthlyCostValue, existingAttendant.code],
+          function (updateError) {
+            if (updateError) {
+              if (updateError.message && updateError.message.toLowerCase().includes('unique')) {
+                return res.status(409).json({ message: 'Attendant code already exists.' });
+              }
+
+              console.error('Failed to update attendant', updateError);
+              return res.status(500).json({ message: 'Failed to update attendant.' });
+            }
+
+            if (this.changes === 0) {
+              return res.status(404).json({ message: 'Attendant not found.' });
+            }
+
+            return res.json({
+              code: normalizedNewCode,
+              name: trimmedName,
+              monthlyCost: monthlyCostValue
+            });
+          }
+        );
+      }
+    );
+  });
+
+  app.delete('/api/attendants/:code', (req, res) => {
+    const { code } = req.params || {};
+    const normalizedCode = normalizeAttendantCode(code);
+
+    if (!normalizedCode || !isValidAttendantCode(normalizedCode)) {
+      return res.status(400).json({ message: 'A valid 4-character code is required in the route.' });
+    }
+
+    db.run(
+      `DELETE FROM attendants WHERE code = ?`,
+      [normalizedCode],
+      function (error) {
+        if (error) {
+          console.error('Failed to delete attendant', error);
+          return res.status(500).json({ message: 'Failed to delete attendant.' });
+        }
+
+        if (this.changes === 0) {
+          return res.status(404).json({ message: 'Attendant not found.' });
+        }
+
+        return res.status(204).send();
+      }
+    );
   });
 
   app.put('/api/sales/:transactionId/attendant', (req, res) => {
@@ -836,38 +992,64 @@ const createApp = (options = {}) => {
           const aReceberAgendado = agendadoMes - pagoDoAgendado;
           const vendasDiretas = 0;
 
-          const investimentoTotal = roundCurrency(
-            settingsRow?.monthly_investment ?? DEFAULT_SETTINGS.monthly_investment
+          const computeAndRespond = (investmentValue) => {
+            const investimentoTotal = roundCurrency(investmentValue);
+            const lucroMes = roundCurrency(pagoDoAgendado + vendasDiretas - investimentoTotal);
+            const roi = investimentoTotal
+              ? roundCurrency((lucroMes / investimentoTotal) * 100)
+              : 0;
+
+            const agendadoTotal = roundCurrency(agendadoMes);
+            const pagoTotal = roundCurrency(pagoDoAgendado);
+            const aReceberTotal = roundCurrency(aReceberAgendado);
+            const frustradoTotal = roundCurrency(frustradoAgendado);
+            const vendasDiretasTotal = roundCurrency(vendasDiretas);
+
+            return res.json({
+              agendado: agendadoTotal,
+              pago: pagoTotal,
+              aReceber: aReceberTotal,
+              frustrado: frustradoTotal,
+              vendasDiretas: vendasDiretasTotal,
+              investimento: investimentoTotal,
+              lucro: lucroMes,
+              roi,
+              graficoFunil: [agendadoTotal, pagoTotal, aReceberTotal, frustradoTotal],
+              graficoComposicao: [pagoTotal, aReceberTotal, frustradoTotal],
+              agendadoMes: agendadoTotal,
+              pagoDoAgendado: pagoTotal,
+              aReceberAgendado: aReceberTotal,
+              frustradoAgendado: frustradoTotal,
+              investimentoTotal,
+              lucroMes
+            });
+          };
+
+          const settingsInvestmentRaw =
+            settingsRow?.monthly_investment ?? DEFAULT_SETTINGS.monthly_investment;
+          const settingsInvestment = parseMonthlyCost(settingsInvestmentRaw);
+          const shouldUseAttendantCost =
+            normalizedAttendant &&
+            normalizedAttendant !== 'todos' &&
+            normalizedAttendant !== DEFAULT_ATTENDANT.code;
+
+          if (!shouldUseAttendantCost) {
+            return computeAndRespond(settingsInvestment);
+          }
+
+          db.get(
+            `SELECT monthly_cost FROM attendants WHERE lower(code) = ?`,
+            [normalizedAttendant],
+            (attendantError, attendantRow) => {
+              if (attendantError) {
+                console.error('Failed to load attendant monthly cost', attendantError);
+                return res.status(500).json({ message: 'Failed to load attendant monthly cost.' });
+              }
+
+              const attendantCost = parseMonthlyCost(attendantRow?.monthly_cost);
+              return computeAndRespond(attendantCost);
+            }
           );
-          const lucroMes = roundCurrency(pagoDoAgendado + vendasDiretas - investimentoTotal);
-          const roi = investimentoTotal
-            ? roundCurrency((lucroMes / investimentoTotal) * 100)
-            : 0;
-
-          const agendadoTotal = roundCurrency(agendadoMes);
-          const pagoTotal = roundCurrency(pagoDoAgendado);
-          const aReceberTotal = roundCurrency(aReceberAgendado);
-          const frustradoTotal = roundCurrency(frustradoAgendado);
-          const vendasDiretasTotal = roundCurrency(vendasDiretas);
-
-          return res.json({
-            agendado: agendadoTotal,
-            pago: pagoTotal,
-            aReceber: aReceberTotal,
-            frustrado: frustradoTotal,
-            vendasDiretas: vendasDiretasTotal,
-            investimento: investimentoTotal,
-            lucro: lucroMes,
-            roi,
-            graficoFunil: [agendadoTotal, pagoTotal, aReceberTotal, frustradoTotal],
-            graficoComposicao: [pagoTotal, aReceberTotal, frustradoTotal],
-            agendadoMes: agendadoTotal,
-            pagoDoAgendado: pagoTotal,
-            aReceberAgendado: aReceberTotal,
-            frustradoAgendado: frustradoTotal,
-            investimentoTotal,
-            lucroMes
-          });
         }
       );
     });

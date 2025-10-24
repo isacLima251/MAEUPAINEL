@@ -41,11 +41,6 @@
                         <label for="summary-attendant-select">Atendente:</label>
                         <select id="summary-attendant-select">
                             <option value="todos">Todos</option>
-                            <option value="joao">João</option> 
-                            <option value="maria">Maria</option>
-                            <option value="pedro">Pedro</option>
-                            <option value="ana">Ana</option>
-                            <option value="nao_definido">Não Definido</option>
                         </select>
                     </div>
                     <div class="filter-custom-date">
@@ -58,14 +53,14 @@
                 </div>
 
                 <div class="cards-container">
-                    <div class="card"><div class="card-icon blue"><i class="fas fa-calendar-alt"></i></div><div class="card-info"><span class="card-title">Agendado no Mês</span><span class="card-value">R$ 8.253,00</span></div></div>
-                    <div class="card"><div class="card-icon green"><i class="fas fa-check-circle"></i></div><div class="card-info"><span class="card-title">Pago (do Agendado)</span><span class="card-value">R$ 3.662,00</span></div></div>
-                    <div class="card"><div class="card-icon yellow"><i class="fas fa-hourglass-half"></i></div><div class="card-info"><span class="card-title">A Receber (Agendado)</span><span class="card-value">R$ 4.591,00</span></div></div>
-                    <div class="card"><div class="card-icon red"><i class="fas fa-times-circle"></i></div><div class="card-info"><span class="card-title">Frustrado (Agendado)</span><span class="card-value">R$ 834,00</span></div></div>
+                    <div class="card"><div class="card-icon blue"><i class="fas fa-calendar-alt"></i></div><div class="card-info"><span class="card-title">Agendado no Mês</span><span class="card-value">R$ 0,00</span></div></div>
+                    <div class="card"><div class="card-icon green"><i class="fas fa-check-circle"></i></div><div class="card-info"><span class="card-title">Pago (do Agendado)</span><span class="card-value">R$ 0,00</span></div></div>
+                    <div class="card"><div class="card-icon yellow"><i class="fas fa-hourglass-half"></i></div><div class="card-info"><span class="card-title">A Receber (Agendado)</span><span class="card-value">R$ 0,00</span></div></div>
+                    <div class="card"><div class="card-icon red"><i class="fas fa-times-circle"></i></div><div class="card-info"><span class="card-title">Frustrado (Agendado)</span><span class="card-value">R$ 0,00</span></div></div>
                     <div class="card"><div class="card-icon green"><i class="fas fa-cash-register"></i></div><div class="card-info"><span class="card-title">Vendas Diretas</span><span class="card-value">R$ 0,00</span></div></div>
-                    <div class="card"><div class="card-icon orange"><i class="fas fa-wallet"></i></div><div class="card-info"><span class="card-title">Investimento Total</span><span class="card-value">R$ 4.257,00</span></div></div>
-                    <div class="card"><div class="card-icon green"><i class="fas fa-chart-line"></i></div><div class="card-info"><span class="card-title">Lucro do Mês</span><span class="card-value">-R$ 595,00</span></div></div>
-                    <div class="card"><div class="card-icon blue"><i class="fas fa-percentage"></i></div><div class="card-info"><span class="card-title">ROI</span><span class="card-value">193,9%</span></div></div>
+                    <div class="card"><div class="card-icon orange"><i class="fas fa-wallet"></i></div><div class="card-info"><span class="card-title">Investimento Total</span><span class="card-value">R$ 0,00</span></div></div>
+                    <div class="card"><div class="card-icon green"><i class="fas fa-chart-line"></i></div><div class="card-info"><span class="card-title">Lucro do Mês</span><span class="card-value">R$ 0,00</span></div></div>
+                    <div class="card"><div class="card-icon blue"><i class="fas fa-percentage"></i></div><div class="card-info"><span class="card-title">ROI</span><span class="card-value">0,0%</span></div></div>
                 </div>
                 
                 <div class="charts-container">
@@ -77,7 +72,7 @@
                 <div class="filter-bar">
                     <div class="search-box"><i class="fas fa-search"></i><input type="text" id="sales-search" placeholder="Pesquisar por nome, email ou CPF..."></div>
                     <div class="filter-select-group"><label for="status-select">Status:</label><select id="status-select"><option value="todos">Todos</option><option value="pago">Pago</option><option value="agendado">Agendado</option><option value="cobranca">Em Cobrança</option><option value="frustrado">Frustrado</option></select></div>
-                    <div class="filter-select-group"><label for="attendant-select">Atendente:</label><select id="attendant-select"><option value="todos">Todos</option><option value="joao">João</option><option value="maria">Maria</option><option value="pedro">Pedro</option><option value="ana">Ana</option><option value="nao_definido">Não Definido</option></select></div>
+                    <div class="filter-select-group"><label for="sales-attendant-select">Atendente:</label><select id="sales-attendant-select"><option value="todos">Todos</option></select></div>
                 </div>
                 <div class="sales-summary-bar">
                     <div class="summary-card"><span class="summary-title">Vendas Encontradas</span><span class="summary-value" id="sales-count">0</span></div>
@@ -88,18 +83,14 @@
                     <table>
                         <thead><tr><th>Cliente</th><th>Produto</th><th>Atendente</th><th>Data Agendada</th><th>Valor (R$)</th><th>Status</th><th>Ações</th></tr></thead>
                         <tbody>
-                            <tr data-cliente="João Silva" data-email="joao.silva@exemplo.com" data-telefone="(11) 98765-4321" data-cpf="123.456.789-00" data-produto="Produto Exemplo A" data-valor="R$ 1.500,00" data-valor-numerico="1500" data-status="pago" data-status-texto="Pago" data-data="20/10/2025" data-historico="<li>...</li>" data-atendente="joao"><td>João Silva</td><td>Produto Exemplo A</td><td>João</td><td>20/10/2025</td><td>1.500,00</td><td><span class="status pago">Pago</span></td><td><button class="action-button">Ver</button></td></tr>
-                            <tr data-cliente="Maria Oliveira" data-email="maria.o@exemplo.com" data-telefone="(21) 91234-5678" data-cpf="987.654.321-11" data-produto="Produto Exemplo B" data-valor="R$ 800,00" data-valor-numerico="800" data-status="agendado" data-status-texto="Agendado" data-data="22/10/2025" data-historico="<li>...</li>" data-atendente="maria"><td>Maria Oliveira</td><td>Produto Exemplo B</td><td>Maria</td><td>22/10/2025</td><td>800,00</td><td><span class="status agendado">Agendado</span></td><td><button class="action-button">Ver</button></td></tr>
-                            <tr data-cliente="Carlos Souza" data-email="carlos.souza@exemplo.com" data-telefone="(31) 95555-4444" data-cpf="555.444.333-22" data-produto="Produto Exemplo A" data-valor="R$ 1.500,00" data-valor-numerico="1500" data-status="frustrado" data-status-texto="Frustrado" data-data="15/10/2025" data-historico="<li>...</li>" data-atendente="joao"><td>Carlos Souza</td><td>Produto Exemplo A</td><td>João</td><td>15/10/2025</td><td>1.500,00</td><td><span class="status frustrado">Frustrado</span></td><td><button class="action-button">Ver</button></td></tr>
-                            <tr data-cliente="Ana Pereira" data-email="ana.pereira@exemplo.com" data-telefone="(41) 98877-6655" data-cpf="111.222.333-44" data-produto="Produto Exemplo C" data-valor="R$ 300,00" data-valor-numerico="300" data-status="cobranca" data-status-texto="Em Cobrança" data-data="25/10/2025" data-historico="<li>...</li>" data-atendente="nao_definido"><td>Ana Pereira</td><td>Produto Exemplo C</td><td>Não Definido</td><td>25/10/2025</td><td>300,00</td><td><span class="status cobranca">Em Cobrança</span></td><td><button class="action-button">Ver</button></td></tr>
                         </tbody>
                     </table>
                 </div>
             </div> <div class="page" id="page-integracao">
-                <div class="integration-box"><h3 class="integration-title">Configuração de Postback (Braip)</h3><p class="integration-description">Este é o seu URL de Postback único. Copie este link e cole-o na secção "Postback" dentro das configurações do seu produto na Braip.</p><div class="postback-url-container"><input type="text" value="https://teu-dominio.com.br/api/postback?id=TuaChaveSecreta" id="postback-url" readonly><button class="action-button" id="copy-url-btn"><i class="fas fa-copy"></i> Copiar</button></div></div>
+                    <div class="integration-box"><h3 class="integration-title">Configuração de Postback (Braip)</h3><p class="integration-description">Este é o seu URL de Postback único. Copie este link e cole-o na secção "Postback" dentro das configurações do seu produto na Braip.</p><div class="postback-url-container"><input type="text" value="" id="postback-url" readonly><button class="action-button" id="copy-url-btn"><i class="fas fa-copy"></i> Copiar</button></div></div>
                 <div class="integration-box"><h3 class="integration-title">Como Configurar na Braip</h3><p class="integration-description">Siga estes passos para que a Braip envie as atualizações de status automaticamente para o seu painel.</p><ol class="instructions-list"><li>Aceda à sua conta da Braip.</li><li>Vá para "Produtos" e selecione o produto que deseja integrar.</li><li>No menu lateral do produto, procure por "Configurações" e depois "Postback".</li><li>Cole o URL acima no campo "URL de Postback".</li><li>Na secção "Eventos", selecione **todos** os status que deseja acompanhar. O nosso painel usa principalmente estes:<ul class="event-list"><li><i class="fas fa-check"></i> Pagamento Aprovado</li><li><i class="fas fa-check"></i> Agendado</li><li><i class="fas fa-check"></i> Frustrada</li><li><i class="fas fa-check"></i> Cancelada</li><li><i class="fas fa-check"></i> Devolvida</li><li><i class="fas fa-check"></i> Chargeback</li></ul></li><li>Salve as alterações. A partir desse momento, as novas vendas e atualizações de status aparecerão automaticamente no seu painel.</li></ol></div>
             </div> <div class="page" id="page-configuracao">
-                <div class="config-box"><h3 class="config-title">Perfil de Utilizador</h3><div class="form-group"><label for="config-nome" class="form-label">Nome:</label><input type="text" id="config-nome" class="form-input" value="[Teu Nome]"></div><div class="form-group"><label for="config-email" class="form-label">Email:</label><input type="email" id="config-email" class="form-input" value="teuemail@exemplo.com"></div><hr class="form-divider"><h3 class="config-title">Gerenciar Atendentes</h3>
+                <div class="config-box"><h3 class="config-title">Perfil de Utilizador</h3><div class="form-group"><label for="config-nome" class="form-label">Nome:</label><input type="text" id="config-nome" class="form-input" value=""></div><div class="form-group"><label for="config-email" class="form-label">Email:</label><input type="email" id="config-email" class="form-input" value=""></div><hr class="form-divider"><h3 class="config-title">Gerenciar Atendentes</h3>
                     
                     <div class="add-attendant-form">
                         <div class="form-group inline"> <label for="add-attendant-name" class="form-label">Nome:</label>
@@ -124,13 +115,11 @@
                                     </tr>
                             </thead>
                             <tbody id="attendants-table-body">
-                                <tr><td>João</td><td>J1.12</td></tr>
-                                <tr><td>Maria</td><td>M2.34</td></tr>
                             </tbody>
                         </table>
                     </div>
 
-                    <hr class="form-divider"><h3 class="config-title">Configurações Financeiras</h3><div class="form-group"><label for="config-investimento" class="form-label">Investimento Mensal (R$):</label><input type="number" id="config-investimento" class="form-input" value="4257.00" placeholder="Ex: 5000.00"><p class="form-hint">Este valor será usado para calcular o Lucro e o ROI na página "Resumo".</p></div><div class="form-group"><button class="action-button save-btn"><i class="fas fa-save"></i> Salvar Alterações</button></div></div>
+                    <hr class="form-divider"><h3 class="config-title">Configurações Financeiras</h3><div class="form-group"><label for="config-investimento" class="form-label">Investimento Mensal (R$):</label><input type="number" id="config-investimento" class="form-input" value="" placeholder="Ex: 5000.00"><p class="form-hint">Este valor será usado para calcular o Lucro e o ROI na página "Resumo".</p></div><div class="form-group"><button class="action-button save-btn"><i class="fas fa-save"></i> Salvar Alterações</button></div></div>
             </div> </div> </div> <div class="modal-overlay" id="modal-detalhes">
         <div class="modal-content">
             <div class="modal-header">
@@ -145,12 +134,8 @@
                 <div class="detalhe-item">
                     <strong>Atendente:</strong>
                     <span id="modal-atendente-display" class="editable-attendant"></span> 
-                    <select id="modal-atendente-select" class="editable-attendant form-input" style="display: none; width: auto;"> 
+                    <select id="modal-atendente-select" class="editable-attendant form-input" style="display: none; width: auto;">
                         <option value="" disabled selected>-- Atribuir --</option>
-                        <option value="joao">João</option> 
-                        <option value="maria">Maria</option>
-                        <option value="pedro">Pedro</option>
-                        <option value="ana">Ana</option>
                     </select>
                 </div> 
                 <hr>

@@ -69,6 +69,16 @@ test('POST /api/postback stores the sale and GET /api/sales returns it', { concu
   await closeDatabase(db);
 });
 
+test('GET /api/postback-url returns the resolved URL', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  const response = await request(app).get('/api/postback-url').set('Host', 'painel.example.com');
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, { url: 'http://painel.example.com/api/postback' });
+
+  await closeDatabase(db);
+});
+
 test('POST /api/postback requires transaction_id', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
@@ -76,6 +86,32 @@ test('POST /api/postback requires transaction_id', { concurrency: 1 }, async () 
 
   assert.equal(response.statusCode, 400);
   assert.equal(response.body.message, 'transaction_id is required.');
+
+  await closeDatabase(db);
+});
+
+test('POST /api/attendants requires a 4-character code', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  const shortCodeResponse = await request(app)
+    .post('/api/attendants')
+    .send({ name: 'Teste', code: 'abc' });
+  assert.equal(shortCodeResponse.statusCode, 400);
+
+  const invalidCharResponse = await request(app)
+    .post('/api/attendants')
+    .send({ name: 'Teste', code: 'abc!' });
+  assert.equal(invalidCharResponse.statusCode, 400);
+
+  const reservedCodeResponse = await request(app)
+    .post('/api/attendants')
+    .send({ name: 'Teste', code: 'nao_definido' });
+  assert.equal(reservedCodeResponse.statusCode, 400);
+
+  const validResponse = await request(app)
+    .post('/api/attendants')
+    .send({ name: 'Teste', code: 'abcd' });
+  assert.equal(validResponse.statusCode, 201);
 
   await closeDatabase(db);
 });
@@ -254,24 +290,37 @@ test('GET /api/settings returns defaults and PUT updates them', { concurrency: 1
   const defaultResponse = await request(app).get('/api/settings');
   assert.equal(defaultResponse.statusCode, 200);
   assert.deepEqual(defaultResponse.body, {
+    name: '',
+    email: '',
+    investment: 0,
     userName: '',
     userEmail: '',
     monthlyInvestment: 0
   });
 
   const updatePayload = {
-    userName: 'Ana',
-    userEmail: 'ana@example.com',
-    monthlyInvestment: 4321.98
+    name: 'Ana',
+    email: 'ana@example.com',
+    investment: 4321.98
   };
 
   const updateResponse = await request(app).put('/api/settings').send(updatePayload);
   assert.equal(updateResponse.statusCode, 200);
-  assert.deepEqual(updateResponse.body, updatePayload);
+  assert.deepEqual(updateResponse.body, {
+    ...updatePayload,
+    userName: 'Ana',
+    userEmail: 'ana@example.com',
+    monthlyInvestment: 4321.98
+  });
 
   const verifyResponse = await request(app).get('/api/settings');
   assert.equal(verifyResponse.statusCode, 200);
-  assert.deepEqual(verifyResponse.body, updatePayload);
+  assert.deepEqual(verifyResponse.body, {
+    ...updatePayload,
+    userName: 'Ana',
+    userEmail: 'ana@example.com',
+    monthlyInvestment: 4321.98
+  });
 
   await closeDatabase(db);
 });
@@ -332,16 +381,22 @@ test('GET /api/summary aggregates sales data for the current month and attendant
   const summaryResponse = await request(app).get('/api/summary');
   assert.equal(summaryResponse.statusCode, 200);
   assert.deepEqual(summaryResponse.body, {
+    agendado: 1000,
+    pago: 300,
+    aReceber: 700,
+    frustrado: 200,
+    vendasDiretas: 0,
+    investimento: 200,
+    lucro: 100,
+    roi: 50,
+    graficoFunil: [1000, 300, 700, 200],
+    graficoComposicao: [300, 700, 200],
     agendadoMes: 1000,
     pagoDoAgendado: 300,
     aReceberAgendado: 700,
     frustradoAgendado: 200,
-    vendasDiretas: 0,
     investimentoTotal: 200,
-    lucroMes: 100,
-    roi: 50,
-    graficoFunil: [1000, 300, 700, 200],
-    graficoComposicao: [300, 700, 200]
+    lucroMes: 100
   });
 
   const attendantSummaryResponse = await request(app)
@@ -349,16 +404,22 @@ test('GET /api/summary aggregates sales data for the current month and attendant
     .query({ attendant: 'joao' });
   assert.equal(attendantSummaryResponse.statusCode, 200);
   assert.deepEqual(attendantSummaryResponse.body, {
+    agendado: 0,
+    pago: 300,
+    aReceber: -300,
+    frustrado: 0,
+    vendasDiretas: 0,
+    investimento: 200,
+    lucro: 100,
+    roi: 50,
+    graficoFunil: [0, 300, -300, 0],
+    graficoComposicao: [300, -300, 0],
     agendadoMes: 0,
     pagoDoAgendado: 300,
     aReceberAgendado: -300,
     frustradoAgendado: 0,
-    vendasDiretas: 0,
     investimentoTotal: 200,
-    lucroMes: 100,
-    roi: 50,
-    graficoFunil: [0, 300, -300, 0],
-    graficoComposicao: [300, -300, 0]
+    lucroMes: 100
   });
 
   await closeDatabase(db);

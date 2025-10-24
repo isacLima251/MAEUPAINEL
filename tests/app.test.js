@@ -1,14 +1,23 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const { createApp } = require('../src/app');
-const { createDatabase } = require('../src/database');
+const { createApp } = require('../src/server');
 
 const setupApp = () => {
-  const db = createDatabase({ path: ':memory:' });
-  const { app } = createApp({ db });
+  const { app, db } = createApp({ databasePath: ':memory:' });
   return { app, db };
 };
+
+const closeDatabase = (db) =>
+  new Promise((resolve, reject) => {
+    db.close((error) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
 
 test('GET /api/sales returns an empty list when there are no records', async () => {
   const { app, db } = setupApp();
@@ -18,10 +27,10 @@ test('GET /api/sales returns an empty list when there are no records', async () 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, []);
 
-  await new Promise((resolve, reject) => db.close((error) => (error ? reject(error) : resolve())));
+  await closeDatabase(db);
 });
 
-test('POST /api/postback upserts a sale and GET /api/sales lists it', async () => {
+test('POST /api/postback stores the sale and GET /api/sales returns it', async () => {
   const { app, db } = setupApp();
 
   const payload = {
@@ -44,5 +53,16 @@ test('POST /api/postback upserts a sale and GET /api/sales lists it', async () =
   assert.equal(listResponse.body[0].transaction_id, payload.transaction_id);
   assert.equal(listResponse.body[0].status_code, payload.status_code);
 
-  await new Promise((resolve, reject) => db.close((error) => (error ? reject(error) : resolve())));
+  await closeDatabase(db);
+});
+
+test('POST /api/postback requires transaction_id', async () => {
+  const { app, db } = setupApp();
+
+  const response = await request(app).post('/api/postback').send({});
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.body.message, 'transaction_id is required.');
+
+  await closeDatabase(db);
 });

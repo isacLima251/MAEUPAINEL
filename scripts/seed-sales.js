@@ -309,7 +309,7 @@ const sales = [
 ];
 
 const seedSales = () => {
-  const { db } = initializeDatabase();
+  const db = initializeDatabase();
 
   db.serialize(() => {
     db.run('DELETE FROM sales', (deleteError) => {

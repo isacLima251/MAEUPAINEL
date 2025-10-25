@@ -27,6 +27,42 @@ const currentMonthDate = (day = 15) => {
   return `${year}-${month}-${dayString} 12:00:00`;
 };
 
+const padTwoDigits = (value) => String(value).padStart(2, '0');
+
+const formatDateTime = (date) => {
+  const year = date.getFullYear();
+  const month = padTwoDigits(date.getMonth() + 1);
+  const day = padTwoDigits(date.getDate());
+  const hours = padTwoDigits(date.getHours());
+  const minutes = padTwoDigits(date.getMinutes());
+  const seconds = padTwoDigits(date.getSeconds());
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+const dateDaysFromToday = (days) => {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return formatDateTime(date);
+};
+
+const dateInThisMonth = (day = 15) => {
+  const now = new Date();
+  const target = new Date(now.getFullYear(), now.getMonth(), 1, 12, 0, 0, 0);
+  const maxDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(Math.max(day, 1), maxDay));
+  return formatDateTime(target);
+};
+
+const dateInLastMonth = (day = 10) => {
+  const now = new Date();
+  const target = new Date(now.getFullYear(), now.getMonth() - 1, 1, 12, 0, 0, 0);
+  const maxDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(Math.max(day, 1), maxDay));
+  return formatDateTime(target);
+};
+
 test('GET /api/sales returns an empty list when there are no records', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
@@ -442,6 +478,63 @@ test('GET /api/settings returns defaults and PUT updates them', { concurrency: 1
   await closeDatabase(db);
 });
 
+test('GET /api/summary defaults to today when no period is provided', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  const todayDate = dateDaysFromToday(0);
+  const yesterdayDate = dateDaysFromToday(-1);
+
+  await request(app)
+    .post('/api/postback')
+    .send({
+      transaction_id: 'summary-today-agendado',
+      status_code: 2,
+      status_text: 'Agendado',
+      client_email: 'today@example.com',
+      product_name: 'Produto Hoje',
+      total_value_cents: 50000,
+      created_at: todayDate,
+      updated_at: todayDate
+    });
+
+  await request(app)
+    .post('/api/postback')
+    .send({
+      transaction_id: 'summary-yesterday-pago',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'yesterday@example.com',
+      product_name: 'Produto Ontem',
+      total_value_cents: 70000,
+      created_at: yesterdayDate,
+      updated_at: yesterdayDate
+    });
+
+  const response = await request(app).get('/api/summary');
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, {
+    agendado: 500,
+    pago: 0,
+    aReceber: 500,
+    frustrado: 0,
+    vendasDiretas: 0,
+    investimento: 0,
+    lucro: 0,
+    roi: 0,
+    graficoFunil: [500, 0, 500, 0],
+    graficoComposicao: [0, 500, 0],
+    agendadoMes: 500,
+    pagoDoAgendado: 0,
+    aReceberAgendado: 500,
+    frustradoAgendado: 0,
+    investimentoTotal: 0,
+    lucroMes: 0
+  });
+
+  await closeDatabase(db);
+});
+
 test('GET /api/summary aggregates sales data for the current month and attendant filter', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
@@ -507,7 +600,7 @@ test('GET /api/summary aggregates sales data for the current month and attendant
   assert.equal(attendantsList.statusCode, 200);
   assert.deepEqual(attendantsList.body, [{ code: 'joao', name: 'João', monthlyCost: 150 }]);
 
-  const summaryResponse = await request(app).get('/api/summary');
+  const summaryResponse = await request(app).get('/api/summary').query({ period: 'this_month' });
   assert.equal(summaryResponse.statusCode, 200);
   assert.deepEqual(summaryResponse.body, {
     agendado: 1000,
@@ -530,7 +623,7 @@ test('GET /api/summary aggregates sales data for the current month and attendant
 
   const attendantSummaryResponse = await request(app)
     .get('/api/summary')
-    .query({ attendant: 'joao' });
+    .query({ period: 'this_month', attendant: 'joao' });
   assert.equal(attendantSummaryResponse.statusCode, 200);
   assert.deepEqual(attendantSummaryResponse.body, {
     agendado: 0,
@@ -549,6 +642,183 @@ test('GET /api/summary aggregates sales data for the current month and attendant
     frustradoAgendado: 0,
     investimentoTotal: 150,
     lucroMes: 150
+  });
+
+  await closeDatabase(db);
+});
+
+test('GET /api/summary filters sales by last_month period', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  const lastMonthDate = dateInLastMonth(12);
+  const thisMonthDate = dateInThisMonth(5);
+
+  await request(app)
+    .post('/api/postback')
+    .send({
+      transaction_id: 'last-month-sale',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'cliente-lastmonth@example.com',
+      product_name: 'Produto Mês Passado',
+      total_value_cents: 80000,
+      created_at: lastMonthDate,
+      updated_at: lastMonthDate
+    });
+
+  await request(app)
+    .post('/api/postback')
+    .send({
+      transaction_id: 'this-month-sale',
+      status_code: 2,
+      status_text: 'Agendado',
+      client_email: 'cliente-thismonth@example.com',
+      product_name: 'Produto Este Mês',
+      total_value_cents: 50000,
+      created_at: thisMonthDate,
+      updated_at: thisMonthDate
+    });
+
+  const response = await request(app).get('/api/summary').query({ period: 'last_month' });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, {
+    agendado: 0,
+    pago: 800,
+    aReceber: -800,
+    frustrado: 0,
+    vendasDiretas: 0,
+    investimento: 0,
+    lucro: 800,
+    roi: 0,
+    graficoFunil: [0, 800, -800, 0],
+    graficoComposicao: [800, -800, 0],
+    agendadoMes: 0,
+    pagoDoAgendado: 800,
+    aReceberAgendado: -800,
+    frustradoAgendado: 0,
+    investimentoTotal: 0,
+    lucroMes: 800
+  });
+
+  await closeDatabase(db);
+});
+
+test('GET /api/summary supports custom date ranges with attendant filter', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+
+  await request(app).put('/api/settings').send({ monthlyInvestment: 100 });
+
+  await request(app)
+    .post('/api/attendants')
+    .send({ name: 'João', code: 'joao', monthlyCost: 80 });
+
+  const insideDateOne = dateDaysFromToday(-3);
+  const insideDateTwo = dateDaysFromToday(-2);
+  const insideDateThree = dateDaysFromToday(-1);
+  const outsideDate = dateDaysFromToday(-10);
+
+  await request(app)
+    .post('/api/postback')
+    .send({
+      transaction_id: 'custom-agendado',
+      status_code: 2,
+      status_text: 'Agendado',
+      client_email: 'joao.agendado@example.com',
+      product_name: 'Pacote Agendado',
+      total_value_cents: 40000,
+      created_at: insideDateOne,
+      updated_at: insideDateOne
+    });
+
+  await request(app)
+    .post('/api/postback')
+    .send({
+      transaction_id: 'custom-pago',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'joao.pago@example.com',
+      product_name: 'Pacote Pago',
+      total_value_cents: 20000,
+      created_at: insideDateTwo,
+      updated_at: insideDateTwo
+    });
+
+  await request(app)
+    .post('/api/postback')
+    .send({
+      transaction_id: 'custom-frustrado',
+      status_code: 5,
+      status_text: 'Frustrado',
+      client_email: 'joao.frustrado@example.com',
+      product_name: 'Pacote Frustrado',
+      total_value_cents: 15000,
+      created_at: insideDateThree,
+      updated_at: insideDateThree
+    });
+
+  await request(app)
+    .post('/api/postback')
+    .send({
+      transaction_id: 'custom-outside',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'joao.fora@example.com',
+      product_name: 'Pacote Fora',
+      total_value_cents: 50000,
+      created_at: outsideDate,
+      updated_at: outsideDate
+    });
+
+  const startDate = dateDaysFromToday(-4).slice(0, 10);
+  const endDate = dateDaysFromToday(-1).slice(0, 10);
+
+  const customResponse = await request(app)
+    .get('/api/summary')
+    .query({ startDate, endDate });
+
+  assert.equal(customResponse.statusCode, 200);
+  assert.deepEqual(customResponse.body, {
+    agendado: 400,
+    pago: 200,
+    aReceber: 200,
+    frustrado: 150,
+    vendasDiretas: 0,
+    investimento: 100,
+    lucro: 100,
+    roi: 100,
+    graficoFunil: [400, 200, 200, 150],
+    graficoComposicao: [200, 200, 150],
+    agendadoMes: 400,
+    pagoDoAgendado: 200,
+    aReceberAgendado: 200,
+    frustradoAgendado: 150,
+    investimentoTotal: 100,
+    lucroMes: 100
+  });
+
+  const attendantResponse = await request(app)
+    .get('/api/summary')
+    .query({ startDate, endDate, attendant: 'joao' });
+
+  assert.equal(attendantResponse.statusCode, 200);
+  assert.deepEqual(attendantResponse.body, {
+    agendado: 400,
+    pago: 200,
+    aReceber: 200,
+    frustrado: 150,
+    vendasDiretas: 0,
+    investimento: 80,
+    lucro: 120,
+    roi: 150,
+    graficoFunil: [400, 200, 200, 150],
+    graficoComposicao: [200, 200, 150],
+    agendadoMes: 400,
+    pagoDoAgendado: 200,
+    aReceberAgendado: 200,
+    frustradoAgendado: 150,
+    investimentoTotal: 80,
+    lucroMes: 120
   });
 
   await closeDatabase(db);

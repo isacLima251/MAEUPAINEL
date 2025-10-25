@@ -9,6 +9,8 @@ const defaultDatabasePath =
 
 const DEFAULT_ATTENDANT = { code: 'nao_definido', name: 'Não Definido' };
 
+const SUMMARY_PERIODS = new Set(['today', 'this_week', 'this_month', 'last_month', 'this_year']);
+
 const attendantsRegistry = [DEFAULT_ATTENDANT];
 
 const normalizeAttendantCode = (code) => {
@@ -75,6 +77,136 @@ const DEFAULT_SETTINGS = {
 const MANUAL_STATUS_MAP = {
   pago: { code: 3, text: 'Pago' },
   frustrado: { code: 5, text: 'Frustrado' }
+};
+
+const padTwoDigits = (value) => String(value).padStart(2, '0');
+
+const formatDateTimeForSqlite = (date) => {
+  const year = date.getFullYear();
+  const month = padTwoDigits(date.getMonth() + 1);
+  const day = padTwoDigits(date.getDate());
+  const hours = padTwoDigits(date.getHours());
+  const minutes = padTwoDigits(date.getMinutes());
+  const seconds = padTwoDigits(date.getSeconds());
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+const startOfDay = (date) => {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const endOfDay = (date) => {
+  const result = new Date(date);
+  result.setHours(23, 59, 59, 999);
+  return result;
+};
+
+const parseDateOnly = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return null;
+  }
+
+  const [yearStr, monthStr, dayStr] = trimmed.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr) - 1;
+  const day = Number(dayStr);
+
+  const parsed = new Date(year, month, day);
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const resolveSummaryDateRange = ({ period, startDate, endDate }) => {
+  const now = new Date();
+
+  if (startDate && endDate) {
+    const parsedStart = parseDateOnly(startDate);
+    const parsedEnd = parseDateOnly(endDate);
+
+    if (!parsedStart || !parsedEnd) {
+      return { error: 'Invalid startDate or endDate format. Use YYYY-MM-DD.' };
+    }
+
+    const rangeStart = startOfDay(parsedStart);
+    const rangeEnd = endOfDay(parsedEnd);
+
+    if (rangeStart.getTime() > rangeEnd.getTime()) {
+      return { error: 'startDate must be before or equal to endDate.' };
+    }
+
+    return {
+      start: formatDateTimeForSqlite(rangeStart),
+      end: formatDateTimeForSqlite(rangeEnd)
+    };
+  }
+
+  const effectivePeriod = period && SUMMARY_PERIODS.has(period) ? period : 'today';
+
+  const buildRange = () => {
+    switch (effectivePeriod) {
+      case 'this_week': {
+        const today = startOfDay(now);
+        const weekday = today.getDay();
+        const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
+        today.setDate(today.getDate() - daysSinceMonday);
+
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+
+        return {
+          start: today,
+          end: endOfDay(weekEnd)
+        };
+      }
+      case 'this_month': {
+        const monthStart = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+        const monthEnd = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
+        return { start: monthStart, end: monthEnd };
+      }
+      case 'last_month': {
+        const monthStart = startOfDay(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+        const monthEnd = endOfDay(new Date(now.getFullYear(), now.getMonth(), 0));
+
+        return { start: monthStart, end: monthEnd };
+      }
+      case 'this_year': {
+        const yearStart = startOfDay(new Date(now.getFullYear(), 0, 1));
+        const yearEnd = endOfDay(new Date(now.getFullYear(), 11, 31));
+
+        return { start: yearStart, end: yearEnd };
+      }
+      case 'today':
+      default: {
+        const dayStart = startOfDay(now);
+        const dayEnd = endOfDay(now);
+
+        return { start: dayStart, end: dayEnd };
+      }
+    }
+  };
+
+  const { start, end } = buildRange();
+
+  return {
+    start: formatDateTimeForSqlite(start),
+    end: formatDateTimeForSqlite(end)
+  };
 };
 
 const mapSettingsResponse = (row = {}) => {
@@ -937,17 +1069,46 @@ const createApp = (options = {}) => {
   });
 
   app.get('/api/summary', (req, res) => {
-    const { period = 'this_month', attendant } = req.query || {};
+    const { period: rawPeriod, startDate: rawStartDate, endDate: rawEndDate, attendant } = req.query || {};
+
+    const normalizedPeriod = typeof rawPeriod === 'string' ? rawPeriod.trim().toLowerCase() : undefined;
+    const hasStartDate = typeof rawStartDate === 'string' && rawStartDate.trim();
+    const hasEndDate = typeof rawEndDate === 'string' && rawEndDate.trim();
+    const hasCustomRange = hasStartDate || hasEndDate;
+
+    if (normalizedPeriod && hasCustomRange) {
+      return res.status(400).json({
+        message: 'Use either period or startDate/endDate to filter the summary, not both.'
+      });
+    }
+
+    if (hasCustomRange && !(hasStartDate && hasEndDate)) {
+      return res.status(400).json({ message: 'Both startDate and endDate are required for custom ranges.' });
+    }
+
+    if (normalizedPeriod && !SUMMARY_PERIODS.has(normalizedPeriod)) {
+      return res.status(400).json({ message: 'Invalid period parameter provided.' });
+    }
+
+    const period = normalizedPeriod || (hasCustomRange ? undefined : 'today');
+    const { error: dateRangeError, start, end } = resolveSummaryDateRange({
+      period,
+      startDate: hasStartDate ? rawStartDate : undefined,
+      endDate: hasEndDate ? rawEndDate : undefined
+    });
+
+    if (dateRangeError) {
+      return res.status(400).json({ message: dateRangeError });
+    }
 
     const conditions = [];
     const params = [];
+    const dateColumn = "COALESCE(updated_at, created_at)";
 
-    if (period === 'this_month') {
-      conditions.push("strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')");
-    } else if (req.query.startDate && req.query.endDate) {
-      conditions.push('datetime(created_at) >= datetime(?)');
-      conditions.push('datetime(created_at) <= datetime(?)');
-      params.push(req.query.startDate, req.query.endDate);
+    if (start && end) {
+      conditions.push(`datetime(${dateColumn}) >= datetime(?)`);
+      conditions.push(`datetime(${dateColumn}) <= datetime(?)`);
+      params.push(start, end);
     }
 
     const normalizedAttendant = normalizeAttendantCode(attendant);

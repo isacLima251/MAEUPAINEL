@@ -5,6 +5,9 @@ let funilChartInstance = null;
 let composicaoChartInstance = null;
 let summaryFilterButtons = [];
 let summaryAttendantSelect = null;
+let summaryCustomStartInput = null;
+let summaryCustomEndInput = null;
+let summaryCustomApplyButton = null;
 let salesTableBody = null;
 let salesCountEl = null;
 let salesTotalValueEl = null;
@@ -26,7 +29,12 @@ let modalCurrentTransactionIdInput = null;
 let attendantsTableBodyEl = null;
 let attendantsTableData = [];
 
+let currentSummaryPeriod = 'today';
+
+const SUMMARY_CUSTOM_PERIOD_KEY = 'custom';
+
 const periodButtonMap = {
+    'hoje': 'today',
     'este mês': 'this_month',
     'mês passado': 'last_month',
     'este ano': 'this_year'
@@ -48,8 +56,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function cacheDomElements() {
-    summaryFilterButtons = Array.from(document.querySelectorAll('.filter-btn'));
+    summaryFilterButtons = Array.from(document.querySelectorAll('#page-resumo .filter-btn'));
     summaryAttendantSelect = document.getElementById('summary-attendant-select');
+    summaryCustomStartInput = document.getElementById('date-start');
+    summaryCustomEndInput = document.getElementById('date-end');
+    summaryCustomApplyButton = document.querySelector('#page-resumo .filter-apply-btn');
     salesTableBody = document.querySelector('#page-vendas tbody');
     salesCountEl = document.getElementById('sales-count');
     salesTotalValueEl = document.getElementById('sales-total-value');
@@ -72,6 +83,51 @@ function cacheDomElements() {
     attendantsTableBodyEl = document.getElementById('attendants-table-body');
 
     bindManualStatusButtons();
+
+    const activeButton = summaryFilterButtons.find((button) => button.classList.contains('active'));
+    if (activeButton && activeButton.dataset.period) {
+        currentSummaryPeriod = activeButton.dataset.period;
+    } else {
+        currentSummaryPeriod = 'today';
+        setActiveSummaryButtonByPeriod('today');
+    }
+}
+
+function setActiveSummaryButtonByPeriod(period) {
+    if (!summaryFilterButtons || summaryFilterButtons.length === 0) {
+        return;
+    }
+
+    const targetPeriod = (period || '').toLowerCase();
+
+    let targetButton = null;
+    if (targetPeriod) {
+        targetButton = summaryFilterButtons.find((button) => {
+            const buttonPeriod = (button.dataset.period || '').toLowerCase();
+            return buttonPeriod === targetPeriod;
+        });
+    }
+
+    summaryFilterButtons.forEach((button) => button.classList.remove('active'));
+
+    if (targetButton) {
+        targetButton.classList.add('active');
+    }
+}
+
+function clearCustomDateInputs() {
+    if (summaryCustomStartInput) {
+        summaryCustomStartInput.value = '';
+    }
+    if (summaryCustomEndInput) {
+        summaryCustomEndInput.value = '';
+    }
+}
+
+function resetSummaryFiltersToDefault() {
+    currentSummaryPeriod = 'today';
+    setActiveSummaryButtonByPeriod('today');
+    clearCustomDateInputs();
 }
 
 async function initData() {
@@ -86,9 +142,9 @@ async function initData() {
 }
 
 function setupNavigation() {
-    const menuItems = document.querySelectorAll('.sidebar-menu .menu-item');
+    const menuItems = Array.from(document.querySelectorAll('.sidebar-menu .menu-item'));
     const menuLinks = document.querySelectorAll('.sidebar-menu a');
-    const pages = document.querySelectorAll('.content-area .page');
+    const pages = Array.from(document.querySelectorAll('.content-area .page'));
     const mainTitle = document.getElementById('main-page-title');
 
     menuLinks.forEach((link) => {
@@ -99,23 +155,44 @@ function setupNavigation() {
             const targetTitle = link.dataset.title;
             const targetMenuItem = link.closest('.menu-item');
 
-            pages.forEach((page) => page.classList.remove('active'));
-            menuItems.forEach((item) => item.classList.remove('active'));
-
-            if (targetMenuItem) {
-                targetMenuItem.classList.add('active');
-            }
-
-            const targetPage = document.getElementById(targetPageId);
-            if (targetPage) {
-                targetPage.classList.add('active');
-            }
-
-            if (mainTitle) {
-                mainTitle.textContent = targetTitle || mainTitle.textContent;
-            }
+            handleMenuClick({
+                menuItems,
+                pages,
+                mainTitle,
+                targetMenuItem,
+                targetPageId,
+                targetTitle
+            });
         });
     });
+}
+
+function handleMenuClick({ menuItems, pages, mainTitle, targetMenuItem, targetPageId, targetTitle }) {
+    const pageList = Array.isArray(pages) ? pages : Array.from(pages || []);
+    const menuItemList = Array.isArray(menuItems) ? menuItems : Array.from(menuItems || []);
+
+    pageList.forEach((page) => page.classList.remove('active'));
+    menuItemList.forEach((item) => item.classList.remove('active'));
+
+    if (targetMenuItem) {
+        targetMenuItem.classList.add('active');
+    }
+
+    if (targetPageId) {
+        const targetPage = document.getElementById(targetPageId);
+        if (targetPage) {
+            targetPage.classList.add('active');
+        }
+    }
+
+    if (mainTitle) {
+        mainTitle.textContent = targetTitle || mainTitle.textContent;
+    }
+
+    if (targetPageId === 'page-resumo') {
+        resetSummaryFiltersToDefault();
+        updateSummaryData();
+    }
 }
 
 function setupFilterButtons() {
@@ -128,9 +205,21 @@ function setupFilterButtons() {
         button.addEventListener('click', () => {
             summaryFilterButtons.forEach((btn) => btn.classList.remove('active'));
             button.classList.add('active');
+            currentSummaryPeriod = button.dataset.period || 'today';
+            if (currentSummaryPeriod !== SUMMARY_CUSTOM_PERIOD_KEY) {
+                clearCustomDateInputs();
+            }
             updateSummaryData();
         });
     });
+
+    if (summaryCustomApplyButton) {
+        summaryCustomApplyButton.addEventListener('click', () => {
+            summaryFilterButtons.forEach((btn) => btn.classList.remove('active'));
+            currentSummaryPeriod = SUMMARY_CUSTOM_PERIOD_KEY;
+            updateSummaryData();
+        });
+    }
 }
 
 function setupCopyButton() {
@@ -510,15 +599,29 @@ async function loadAttendantsTable() {
 }
 
 async function updateSummaryData() {
-    const activeButton = summaryFilterButtons.find((button) => button.classList.contains('active'));
-    const period = activeButton ? activeButton.dataset.period : undefined;
     const attendant = summaryAttendantSelect ? summaryAttendantSelect.value : undefined;
 
     const params = new URLSearchParams();
-    if (period) {
-        params.append('period', period);
+    if (currentSummaryPeriod === SUMMARY_CUSTOM_PERIOD_KEY) {
+        const startDate = summaryCustomStartInput ? summaryCustomStartInput.value : '';
+        const endDate = summaryCustomEndInput ? summaryCustomEndInput.value : '';
+
+        if (!startDate || !endDate) {
+            alert('Selecione uma data inicial e final para aplicar o filtro personalizado.');
+            return;
+        }
+
+        if (startDate > endDate) {
+            alert('A data inicial não pode ser maior que a data final.');
+            return;
+        }
+
+        params.append('startDate', startDate);
+        params.append('endDate', endDate);
+    } else if (currentSummaryPeriod) {
+        params.append('period', currentSummaryPeriod);
     }
-    if (attendant !== undefined && attendant !== null && attendant !== '') {
+    if (attendant && attendant !== 'todos') {
         params.append('attendant', attendant);
     }
 

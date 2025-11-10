@@ -34,6 +34,7 @@
             <ul class="sidebar-menu">
                 <li class="menu-item active"><a href="#" data-target="page-resumo" data-title="Visão Geral do Resumo"><i class="fas fa-chart-pie"></i><span>Resumo</span></a></li>
                 <li class="menu-item"><a href="#" data-target="page-atendentes" data-title="Painel de Atendentes"><i class="fas fa-users-cog"></i><span>Painel Atendentes</span></a></li>
+                <li class="menu-item"><a href="#" data-target="page-campanhas" data-title="Painel de Campanhas"><i class="fas fa-bullseye"></i><span>Painel Campanhas</span></a></li>
                 <li class="menu-item"><a href="#" data-target="page-vendas" data-title="Minhas Vendas"><i class="fas fa-dollar-sign"></i><span>Vendas</span></a></li>
                 <li class="menu-item"><a href="#" data-target="page-integracao" data-title="Configurar Integração"><i class="fas fa-cogs"></i><span>Integração</span></a></li>
                 <li class="menu-item"><a href="#" data-target="page-configuracao" data-title="Configurações da Conta"><i class="fas fa-user-cog"></i><span>Configuração</span></a></li>
@@ -126,6 +127,41 @@
                     </div>
                 </div>
 
+                <div class="page" id="page-campanhas">
+                    <div class="filter-bar">
+                        <div class="filter-buttons">
+                            <button class="filter-btn active" data-period="today">Hoje</button>
+                            <button class="filter-btn" data-period="this_month">Este Mês</button>
+                            <button class="filter-btn" data-period="last_month">Mês Passado</button>
+                            <button class="filter-btn" data-period="this_year">Este Ano</button>
+                        </div>
+                        <div class="filter-custom-date">
+                            <label for="campaign-date-start">Período:</label>
+                            <input type="date" id="campaign-date-start" name="campaign-date-start">
+                            <span>até</span>
+                            <input type="date" id="campaign-date-end" name="campaign-date-end">
+                            <button class="filter-apply-btn">Aplicar</button>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <h3 class="table-title">Desempenho das Campanhas</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Campanha</th>
+                                    <th>Custo (Invest.) (R$)</th>
+                                    <th>Receita (Vendas) (R$)</th>
+                                    <th>Lucro (R$)</th>
+                                    <th>ROI (%)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ranking-campanhas-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="page" id="page-vendas">
                     <div class="filter-bar">
                         <div class="search-box"><i class="fas fa-search"></i><input type="text" id="sales-search" placeholder="Pesquisar por nome, email ou CPF..."></div>
@@ -203,6 +239,10 @@
                                     </button>
                                 </div>
                             </div>
+                            <div class="form-group inline">
+                                <label for="add-campaign-cost" class="form-label">Investimento (R$):</label>
+                                <input type="number" id="add-campaign-cost" class="form-input" placeholder="Ex: 1500.00" value="0" step="0.01">
+                            </div>
                             <button class="action-button add-btn" id="add-campaign-btn">
                                 <i class="fas fa-plus"></i> Adicionar
                             </button>
@@ -215,6 +255,7 @@
                                     <tr>
                                         <th>Nome</th>
                                         <th>Código</th>
+                                        <th>Investimento (R$)</th>
                                         <th>Ações</th>
                                     </tr>
                                 </thead>

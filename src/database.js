@@ -79,9 +79,23 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
     db.run(
       `CREATE TABLE IF NOT EXISTS campaigns (
         code TEXT PRIMARY KEY,
-        name TEXT NOT NULL
+        name TEXT NOT NULL,
+        cost REAL DEFAULT 0
       )`
     );
+
+    db.all('PRAGMA table_info(campaigns)', (campaignsError, columns) => {
+      if (campaignsError) {
+        console.error('Failed to inspect campaigns table schema', campaignsError);
+        return;
+      }
+
+      const existingColumns = new Set((columns || []).map((column) => column.name));
+
+      if (!existingColumns.has('cost')) {
+        db.run('ALTER TABLE campaigns ADD COLUMN cost REAL DEFAULT 0');
+      }
+    });
 
     db.all('PRAGMA table_info(attendants)', (attendantsError, columns) => {
       if (attendantsError) {

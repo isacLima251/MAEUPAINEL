@@ -14,6 +14,11 @@ let attendantsReportCustomStartInput = null;
 let attendantsReportCustomEndInput = null;
 let attendantsReportCustomApplyButton = null;
 let attendantsReportTbody = null;
+let campaignReportFilterButtons = [];
+let campaignReportCustomStartInput = null;
+let campaignReportCustomEndInput = null;
+let campaignReportCustomApplyButton = null;
+let campaignReportTbody = null;
 let salesTableBody = null;
 let salesCountEl = null;
 let salesTotalValueEl = null;
@@ -48,6 +53,7 @@ let activeRequests = 0;
 
 let currentSummaryPeriod = 'today';
 let currentAttendantsReportPeriod = 'today';
+let currentCampaignReportPeriod = 'today';
 
 const SUMMARY_CUSTOM_PERIOD_KEY = 'custom';
 
@@ -63,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     setupFilterButtons();
     setupAttendantReportFilters();
+    setupCampaignReportFilters();
     setupCopyButton();
     setupModal();
     setupEventListeners();
@@ -88,6 +95,11 @@ function cacheDomElements() {
     attendantsReportCustomEndInput = document.getElementById('attendants-date-end');
     attendantsReportCustomApplyButton = document.querySelector('#page-atendentes .filter-apply-btn');
     attendantsReportTbody = document.getElementById('ranking-atendentes-tbody');
+    campaignReportFilterButtons = Array.from(document.querySelectorAll('#page-campanhas .filter-btn'));
+    campaignReportCustomStartInput = document.getElementById('campaign-date-start');
+    campaignReportCustomEndInput = document.getElementById('campaign-date-end');
+    campaignReportCustomApplyButton = document.querySelector('#page-campanhas .filter-apply-btn');
+    campaignReportTbody = document.getElementById('ranking-campanhas-tbody');
     salesTableBody = document.querySelector('#page-vendas tbody');
     salesCountEl = document.getElementById('sales-count');
     salesTotalValueEl = document.getElementById('sales-total-value');
@@ -127,6 +139,14 @@ function cacheDomElements() {
     } else {
         currentAttendantsReportPeriod = 'today';
         setActiveAttendantsButtonByPeriod('today');
+    }
+
+    const campaignActiveButton = campaignReportFilterButtons.find((button) => button.classList.contains('active'));
+    if (campaignActiveButton && campaignActiveButton.dataset.period) {
+        currentCampaignReportPeriod = campaignActiveButton.dataset.period;
+    } else {
+        currentCampaignReportPeriod = 'today';
+        setActiveCampaignReportButtonByPeriod('today');
     }
 }
 
@@ -196,6 +216,43 @@ function clearAttendantReportCustomDateInputs() {
     if (attendantsReportCustomEndInput) {
         attendantsReportCustomEndInput.value = '';
     }
+}
+
+function setActiveCampaignReportButtonByPeriod(period) {
+    if (!campaignReportFilterButtons || campaignReportFilterButtons.length === 0) {
+        return;
+    }
+
+    const targetPeriod = (period || '').toLowerCase();
+
+    let targetButton = null;
+    if (targetPeriod) {
+        targetButton = campaignReportFilterButtons.find((button) => {
+            const buttonPeriod = (button.dataset.period || '').toLowerCase();
+            return buttonPeriod === targetPeriod;
+        });
+    }
+
+    campaignReportFilterButtons.forEach((button) => button.classList.remove('active'));
+
+    if (targetButton) {
+        targetButton.classList.add('active');
+    }
+}
+
+function clearCampaignReportCustomDateInputs() {
+    if (campaignReportCustomStartInput) {
+        campaignReportCustomStartInput.value = '';
+    }
+    if (campaignReportCustomEndInput) {
+        campaignReportCustomEndInput.value = '';
+    }
+}
+
+function resetCampaignReportFiltersToDefault() {
+    currentCampaignReportPeriod = 'today';
+    setActiveCampaignReportButtonByPeriod('today');
+    clearCampaignReportCustomDateInputs();
 }
 
 function resetAttendantReportFiltersToDefault() {
@@ -466,6 +523,7 @@ async function initData() {
     await updateSummaryData();
     await loadSalesData();
     await loadAttendantReport();
+    await loadCampaignReport();
 }
 
 function setupNavigation() {
@@ -525,6 +583,11 @@ function handleMenuClick({ menuItems, pages, mainTitle, targetMenuItem, targetPa
         resetAttendantReportFiltersToDefault();
         loadAttendantReport();
     }
+
+    if (targetPageId === 'page-campanhas') {
+        resetCampaignReportFiltersToDefault();
+        loadCampaignReport();
+    }
 }
 
 function setupFilterButtons() {
@@ -578,6 +641,34 @@ function setupAttendantReportFilters() {
             attendantsReportFilterButtons.forEach((btn) => btn.classList.remove('active'));
             currentAttendantsReportPeriod = SUMMARY_CUSTOM_PERIOD_KEY;
             loadAttendantReport();
+        });
+    }
+}
+
+function setupCampaignReportFilters() {
+    campaignReportFilterButtons.forEach((button) => {
+        const label = button.textContent.trim().toLowerCase();
+        if (!button.dataset.period && periodButtonMap[label]) {
+            button.dataset.period = periodButtonMap[label];
+        }
+
+        button.addEventListener('click', () => {
+            campaignReportFilterButtons.forEach((btn) => btn.classList.remove('active'));
+            button.classList.add('active');
+            currentCampaignReportPeriod = button.dataset.period || 'today';
+
+            if (currentCampaignReportPeriod !== SUMMARY_CUSTOM_PERIOD_KEY) {
+                clearCampaignReportCustomDateInputs();
+                loadCampaignReport();
+            }
+        });
+    });
+
+    if (campaignReportCustomApplyButton) {
+        campaignReportCustomApplyButton.addEventListener('click', () => {
+            campaignReportFilterButtons.forEach((btn) => btn.classList.remove('active'));
+            currentCampaignReportPeriod = SUMMARY_CUSTOM_PERIOD_KEY;
+            loadCampaignReport();
         });
     }
 }
@@ -804,7 +895,8 @@ async function loadCampaigns() {
                 .filter((campaign) => campaign && campaign.code && campaign.name)
                 .map((campaign) => ({
                     code: String(campaign.code),
-                    name: String(campaign.name)
+                    name: String(campaign.name),
+                    cost: Number(campaign.cost ?? 0) || 0
                 }));
         } else {
             listaCampanhas = [];
@@ -1007,7 +1099,8 @@ async function loadCampaignsTable() {
     const campaigns = Array.isArray(listaCampanhas)
         ? listaCampanhas.map((campaign) => ({
               code: String(campaign.code),
-              name: String(campaign.name)
+              name: String(campaign.name),
+              cost: Number(campaign.cost ?? 0) || 0
           }))
         : [];
 
@@ -1025,6 +1118,9 @@ async function loadCampaignsTable() {
 
         const codeCell = document.createElement('td');
         codeCell.textContent = campaign.code;
+
+        const costCell = document.createElement('td');
+        costCell.textContent = formatCurrency(campaign.cost);
 
         const actionsCell = document.createElement('td');
         actionsCell.classList.add('attendant-actions-cell');
@@ -1048,6 +1144,7 @@ async function loadCampaignsTable() {
 
         row.appendChild(nameCell);
         row.appendChild(codeCell);
+        row.appendChild(costCell);
         row.appendChild(actionsCell);
 
         campaignsTableBodyEl.appendChild(row);
@@ -1215,6 +1312,92 @@ function renderAttendantRanking(ranking) {
         row.appendChild(valueCell);
 
         attendantsReportTbody.appendChild(row);
+    });
+}
+
+async function loadCampaignReport() {
+    if (!campaignReportTbody) {
+        return;
+    }
+
+    const params = new URLSearchParams();
+
+    if (currentCampaignReportPeriod === SUMMARY_CUSTOM_PERIOD_KEY) {
+        const startDate = campaignReportCustomStartInput ? campaignReportCustomStartInput.value : '';
+        const endDate = campaignReportCustomEndInput ? campaignReportCustomEndInput.value : '';
+
+        if (!startDate || !endDate) {
+            showToast('Informe a data inicial e final para aplicar o filtro personalizado.', 'error');
+            return;
+        }
+
+        if (startDate > endDate) {
+            showToast('A data inicial não pode ser maior que a data final.', 'error');
+            return;
+        }
+
+        params.append('startDate', startDate);
+        params.append('endDate', endDate);
+    } else if (currentCampaignReportPeriod) {
+        params.append('period', currentCampaignReportPeriod);
+    }
+
+    try {
+        const queryString = params.toString();
+        const report = await fetchJson(`/reports/campaigns${queryString ? `?${queryString}` : ''}`);
+        renderCampaignReport(Array.isArray(report) ? report : []);
+    } catch (error) {
+        console.error('Erro ao carregar relatório de campanhas:', error);
+        showToast(error.message || 'Não foi possível carregar o relatório de campanhas.', 'error');
+    }
+}
+
+function renderCampaignReport(report) {
+    if (!campaignReportTbody) {
+        return;
+    }
+
+    campaignReportTbody.innerHTML = '';
+
+    if (!Array.isArray(report) || report.length === 0) {
+        const emptyRow = document.createElement('tr');
+        const emptyCell = document.createElement('td');
+        emptyCell.colSpan = 5;
+        emptyCell.textContent = 'Nenhuma campanha com vendas pagas no período selecionado.';
+        emptyRow.appendChild(emptyCell);
+        campaignReportTbody.appendChild(emptyRow);
+        return;
+    }
+
+    report.forEach((item) => {
+        const row = document.createElement('tr');
+
+        const nameCell = document.createElement('td');
+        nameCell.textContent = item.campaign_name || item.campaign_code || 'Não Definida';
+
+        const costCell = document.createElement('td');
+        costCell.textContent = formatCurrency(Number(item.cost) || 0);
+
+        const revenueCell = document.createElement('td');
+        revenueCell.textContent = formatCurrency(Number(item.receita) || 0);
+
+        const profitCell = document.createElement('td');
+        const lucroValue = Number(item.lucro) || 0;
+        profitCell.textContent = formatCurrency(lucroValue);
+        applyMetricColor(profitCell, lucroValue);
+
+        const roiCell = document.createElement('td');
+        const roiValue = Number(item.roi) || 0;
+        roiCell.textContent = formatPercentage(roiValue);
+        applyMetricColor(roiCell, roiValue);
+
+        row.appendChild(nameCell);
+        row.appendChild(costCell);
+        row.appendChild(revenueCell);
+        row.appendChild(profitCell);
+        row.appendChild(roiCell);
+
+        campaignReportTbody.appendChild(row);
     });
 }
 
@@ -1563,6 +1746,7 @@ async function addCampaign(event) {
 
     const campaignNameInput = document.getElementById('add-campaign-name');
     const campaignCodeInput = document.getElementById('add-campaign-code');
+    const campaignCostInput = document.getElementById('add-campaign-cost');
 
     if (!campaignNameInput || !campaignCodeInput) {
         return;
@@ -1570,6 +1754,8 @@ async function addCampaign(event) {
 
     const name = campaignNameInput.value.trim();
     const code = campaignCodeInput.value.trim();
+    const costRawValue = campaignCostInput ? campaignCostInput.value : '';
+    const { valid: isCostValid, value: parsedCostValue } = parseCurrencyInput(costRawValue);
 
     if (!name || !code) {
         showToast('Por favor, preencha o Nome e o Código da campanha.', 'error');
@@ -1581,19 +1767,28 @@ async function addCampaign(event) {
         return;
     }
 
+    if (!isCostValid) {
+        showToast('Informe um valor numérico válido para o investimento da campanha.', 'error');
+        return;
+    }
+
     try {
         await fetchJson('/campaigns', {
             method: 'POST',
-            body: { name, code }
+            body: { name, code, cost: parsedCostValue }
         });
 
         campaignNameInput.value = '';
         campaignCodeInput.value = '';
+        if (campaignCostInput) {
+            campaignCostInput.value = '0';
+        }
 
         await loadCampaigns();
         await loadCampaignsTable();
         const currentFilters = getCurrentSalesFilters();
         await loadSalesData(currentFilters);
+        await loadCampaignReport();
 
         showToast('Campanha adicionada com sucesso!', 'success');
     } catch (error) {
@@ -1792,12 +1987,23 @@ async function handleEditCampaign(campaignCode) {
         return;
     }
 
+    const costPrompt = prompt('Investimento da campanha (R$):', String(campaign.cost ?? 0));
+    if (costPrompt === null) {
+        return;
+    }
+    const { valid: isCostValid, value: parsedCost } = parseCurrencyInput(costPrompt);
+    if (!isCostValid) {
+        showToast('Informe um valor numérico válido para o investimento da campanha.', 'error');
+        return;
+    }
+
     try {
         await fetchJson(`/campaigns/${encodeURIComponent(campaignCode)}`, {
             method: 'PUT',
             body: {
                 name: trimmedName,
-                newCode: preparedCode
+                newCode: preparedCode,
+                cost: parsedCost
             }
         });
 
@@ -1805,6 +2011,7 @@ async function handleEditCampaign(campaignCode) {
         await loadCampaignsTable();
         const currentFilters = getCurrentSalesFilters();
         await loadSalesData(currentFilters);
+        await loadCampaignReport();
 
         showToast('Campanha atualizada com sucesso!', 'success');
     } catch (error) {
@@ -1827,6 +2034,7 @@ async function handleDeleteCampaign(campaignCode) {
         await loadCampaignsTable();
         const currentFilters = getCurrentSalesFilters();
         await loadSalesData(currentFilters);
+        await loadCampaignReport();
 
         showToast('Campanha removida com sucesso!', 'success');
     } catch (error) {
@@ -1841,6 +2049,20 @@ function obterNomeAtendente(codigo) {
     }
     const atendente = listaAtendentes.find((item) => item.code === codigo || item.id === codigo);
     return atendente ? atendente.name || atendente.nome : '';
+}
+
+function applyMetricColor(element, value) {
+    if (!element) {
+        return;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue === 0) {
+        element.style.color = '';
+        return;
+    }
+
+    element.style.color = numericValue > 0 ? '#00d285' : '#ff5b5b';
 }
 
 function formatCurrency(value) {
@@ -1874,6 +2096,48 @@ function getCurrentSalesFilters() {
         status: salesStatusSelect ? salesStatusSelect.value : 'todos',
         attendant: salesAttendantSelect ? salesAttendantSelect.value : 'todos'
     };
+}
+
+function parseCurrencyInput(value) {
+    if (value === null || value === undefined) {
+        return { valid: true, value: 0 };
+    }
+
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value)) {
+            return { valid: false, value: 0 };
+        }
+        return { valid: true, value };
+    }
+
+    const trimmed = String(value).trim();
+    if (!trimmed) {
+        return { valid: true, value: 0 };
+    }
+
+    const sanitized = trimmed.replace(/\s+/g, '');
+    const dotMatches = (sanitized.match(/\./g) || []).length;
+    const hasComma = sanitized.includes(',');
+    let normalized = sanitized;
+
+    if (hasComma && dotMatches) {
+        normalized = sanitized.replace(/\./g, '').replace(',', '.');
+    } else if (hasComma) {
+        normalized = sanitized.replace(',', '.');
+    } else if (dotMatches > 1) {
+        normalized = sanitized.replace(/\./g, '');
+    }
+
+    if (!/^[-+]?\d*(\.\d+)?$/.test(normalized)) {
+        return { valid: false, value: 0 };
+    }
+
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) {
+        return { valid: false, value: 0 };
+    }
+
+    return { valid: true, value: parsed };
 }
 
 function toNumericValue(value) {

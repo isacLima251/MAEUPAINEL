@@ -9,6 +9,11 @@ let summaryAttendantSelect = null;
 let summaryCustomStartInput = null;
 let summaryCustomEndInput = null;
 let summaryCustomApplyButton = null;
+let attendantsReportFilterButtons = [];
+let attendantsReportCustomStartInput = null;
+let attendantsReportCustomEndInput = null;
+let attendantsReportCustomApplyButton = null;
+let attendantsReportTbody = null;
 let salesTableBody = null;
 let salesCountEl = null;
 let salesTotalValueEl = null;
@@ -42,6 +47,7 @@ let toastContainer = null;
 let activeRequests = 0;
 
 let currentSummaryPeriod = 'today';
+let currentAttendantsReportPeriod = 'today';
 
 const SUMMARY_CUSTOM_PERIOD_KEY = 'custom';
 
@@ -56,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
     cacheDomElements();
     setupNavigation();
     setupFilterButtons();
+    setupAttendantReportFilters();
     setupCopyButton();
     setupModal();
     setupEventListeners();
@@ -76,6 +83,11 @@ function cacheDomElements() {
     summaryCustomStartInput = document.getElementById('date-start');
     summaryCustomEndInput = document.getElementById('date-end');
     summaryCustomApplyButton = document.querySelector('#page-resumo .filter-apply-btn');
+    attendantsReportFilterButtons = Array.from(document.querySelectorAll('#page-atendentes .filter-btn'));
+    attendantsReportCustomStartInput = document.getElementById('attendants-date-start');
+    attendantsReportCustomEndInput = document.getElementById('attendants-date-end');
+    attendantsReportCustomApplyButton = document.querySelector('#page-atendentes .filter-apply-btn');
+    attendantsReportTbody = document.getElementById('ranking-atendentes-tbody');
     salesTableBody = document.querySelector('#page-vendas tbody');
     salesCountEl = document.getElementById('sales-count');
     salesTotalValueEl = document.getElementById('sales-total-value');
@@ -107,6 +119,14 @@ function cacheDomElements() {
     } else {
         currentSummaryPeriod = 'today';
         setActiveSummaryButtonByPeriod('today');
+    }
+
+    const attendantsActiveButton = attendantsReportFilterButtons.find((button) => button.classList.contains('active'));
+    if (attendantsActiveButton && attendantsActiveButton.dataset.period) {
+        currentAttendantsReportPeriod = attendantsActiveButton.dataset.period;
+    } else {
+        currentAttendantsReportPeriod = 'today';
+        setActiveAttendantsButtonByPeriod('today');
     }
 }
 
@@ -145,6 +165,43 @@ function resetSummaryFiltersToDefault() {
     currentSummaryPeriod = 'today';
     setActiveSummaryButtonByPeriod('today');
     clearCustomDateInputs();
+}
+
+function setActiveAttendantsButtonByPeriod(period) {
+    if (!attendantsReportFilterButtons || attendantsReportFilterButtons.length === 0) {
+        return;
+    }
+
+    const targetPeriod = (period || '').toLowerCase();
+
+    let targetButton = null;
+    if (targetPeriod) {
+        targetButton = attendantsReportFilterButtons.find((button) => {
+            const buttonPeriod = (button.dataset.period || '').toLowerCase();
+            return buttonPeriod === targetPeriod;
+        });
+    }
+
+    attendantsReportFilterButtons.forEach((button) => button.classList.remove('active'));
+
+    if (targetButton) {
+        targetButton.classList.add('active');
+    }
+}
+
+function clearAttendantReportCustomDateInputs() {
+    if (attendantsReportCustomStartInput) {
+        attendantsReportCustomStartInput.value = '';
+    }
+    if (attendantsReportCustomEndInput) {
+        attendantsReportCustomEndInput.value = '';
+    }
+}
+
+function resetAttendantReportFiltersToDefault() {
+    currentAttendantsReportPeriod = 'today';
+    setActiveAttendantsButtonByPeriod('today');
+    clearAttendantReportCustomDateInputs();
 }
 
 function getStoredToken() {
@@ -408,6 +465,7 @@ async function initData() {
     ]);
     await updateSummaryData();
     await loadSalesData();
+    await loadAttendantReport();
 }
 
 function setupNavigation() {
@@ -462,6 +520,11 @@ function handleMenuClick({ menuItems, pages, mainTitle, targetMenuItem, targetPa
         resetSummaryFiltersToDefault();
         updateSummaryData();
     }
+
+    if (targetPageId === 'page-atendentes') {
+        resetAttendantReportFiltersToDefault();
+        loadAttendantReport();
+    }
 }
 
 function setupFilterButtons() {
@@ -487,6 +550,34 @@ function setupFilterButtons() {
             summaryFilterButtons.forEach((btn) => btn.classList.remove('active'));
             currentSummaryPeriod = SUMMARY_CUSTOM_PERIOD_KEY;
             updateSummaryData();
+        });
+    }
+}
+
+function setupAttendantReportFilters() {
+    attendantsReportFilterButtons.forEach((button) => {
+        const label = button.textContent.trim().toLowerCase();
+        if (!button.dataset.period && periodButtonMap[label]) {
+            button.dataset.period = periodButtonMap[label];
+        }
+
+        button.addEventListener('click', () => {
+            attendantsReportFilterButtons.forEach((btn) => btn.classList.remove('active'));
+            button.classList.add('active');
+            currentAttendantsReportPeriod = button.dataset.period || 'today';
+
+            if (currentAttendantsReportPeriod !== SUMMARY_CUSTOM_PERIOD_KEY) {
+                clearAttendantReportCustomDateInputs();
+                loadAttendantReport();
+            }
+        });
+    });
+
+    if (attendantsReportCustomApplyButton) {
+        attendantsReportCustomApplyButton.addEventListener('click', () => {
+            attendantsReportFilterButtons.forEach((btn) => btn.classList.remove('active'));
+            currentAttendantsReportPeriod = SUMMARY_CUSTOM_PERIOD_KEY;
+            loadAttendantReport();
         });
     }
 }
@@ -1048,6 +1139,95 @@ function updateSummaryCharts(summary) {
     if (composicaoChartInstance && Array.isArray(summary.graficoComposicao)) {
         composicaoChartInstance.data.datasets[0].data = summary.graficoComposicao;
         composicaoChartInstance.update();
+    }
+}
+
+async function loadAttendantReport() {
+    if (!attendantsReportTbody) {
+        return;
+    }
+
+    const params = new URLSearchParams();
+
+    if (currentAttendantsReportPeriod === SUMMARY_CUSTOM_PERIOD_KEY) {
+        const startDate = attendantsReportCustomStartInput ? attendantsReportCustomStartInput.value : '';
+        const endDate = attendantsReportCustomEndInput ? attendantsReportCustomEndInput.value : '';
+
+        if (!startDate || !endDate) {
+            showToast('Informe a data inicial e final para aplicar o filtro personalizado.', 'error');
+            return;
+        }
+
+        if (startDate > endDate) {
+            showToast('A data inicial não pode ser maior que a data final.', 'error');
+            return;
+        }
+
+        params.append('startDate', startDate);
+        params.append('endDate', endDate);
+    } else if (currentAttendantsReportPeriod) {
+        params.append('period', currentAttendantsReportPeriod);
+    }
+
+    try {
+        const queryString = params.toString();
+        const ranking = await fetchJson(`/reports/attendants${queryString ? `?${queryString}` : ''}`);
+        renderAttendantRanking(Array.isArray(ranking) ? ranking : []);
+    } catch (error) {
+        console.error('Erro ao carregar ranking de atendentes:', error);
+        showToast(error.message || 'Não foi possível carregar o ranking de atendentes.', 'error');
+    }
+}
+
+function renderAttendantRanking(ranking) {
+    if (!attendantsReportTbody) {
+        return;
+    }
+
+    attendantsReportTbody.innerHTML = '';
+
+    if (!Array.isArray(ranking) || ranking.length === 0) {
+        const emptyRow = document.createElement('tr');
+        const emptyCell = document.createElement('td');
+        emptyCell.colSpan = 3;
+        emptyCell.textContent = 'Nenhuma venda paga encontrada para o período selecionado.';
+        emptyRow.appendChild(emptyCell);
+        attendantsReportTbody.appendChild(emptyRow);
+        return;
+    }
+
+    ranking.forEach((item) => {
+        const row = document.createElement('tr');
+
+        const rankCell = document.createElement('td');
+        const rankNumber = Number(item?.rank) || 0;
+        const medal = getMedalForRank(rankNumber);
+        rankCell.textContent = medal ? `${medal} ${rankNumber}` : String(rankNumber || '');
+        row.appendChild(rankCell);
+
+        const nameCell = document.createElement('td');
+        nameCell.textContent = item?.attendant_name || '—';
+        row.appendChild(nameCell);
+
+        const valueCell = document.createElement('td');
+        const totalCents = Number(item?.total_pago_cents) || 0;
+        valueCell.textContent = formatCurrency(totalCents / 100);
+        row.appendChild(valueCell);
+
+        attendantsReportTbody.appendChild(row);
+    });
+}
+
+function getMedalForRank(rank) {
+    switch (rank) {
+        case 1:
+            return '🥇';
+        case 2:
+            return '🥈';
+        case 3:
+            return '🥉';
+        default:
+            return '';
     }
 }
 

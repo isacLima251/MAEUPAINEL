@@ -33,6 +33,7 @@
             <div class="sidebar-header"><h3>Meu Painel</h3></div>
             <ul class="sidebar-menu">
                 <li class="menu-item active"><a href="#" data-target="page-resumo" data-title="Visão Geral do Resumo"><i class="fas fa-chart-pie"></i><span>Resumo</span></a></li>
+                <li class="menu-item"><a href="#" data-target="page-atendentes" data-title="Painel de Atendentes"><i class="fas fa-users-cog"></i><span>Painel Atendentes</span></a></li>
                 <li class="menu-item"><a href="#" data-target="page-vendas" data-title="Minhas Vendas"><i class="fas fa-dollar-sign"></i><span>Vendas</span></a></li>
                 <li class="menu-item"><a href="#" data-target="page-integracao" data-title="Configurar Integração"><i class="fas fa-cogs"></i><span>Integração</span></a></li>
                 <li class="menu-item"><a href="#" data-target="page-configuracao" data-title="Configurações da Conta"><i class="fas fa-user-cog"></i><span>Configuração</span></a></li>
@@ -89,6 +90,39 @@
                     <div class="charts-container">
                         <div class="chart-box"><h4 class="chart-title">Funil do Mês (Agendado)</h4><canvas id="funilChart"></canvas></div>
                         <div class="chart-box"><h4 class="chart-title">Composição do Agendado</h4><canvas id="composicaoChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="page" id="page-atendentes">
+                    <div class="filter-bar">
+                        <div class="filter-buttons">
+                            <button class="filter-btn active" data-period="today">Hoje</button>
+                            <button class="filter-btn" data-period="this_month">Este Mês</button>
+                            <button class="filter-btn" data-period="last_month">Mês Passado</button>
+                            <button class="filter-btn" data-period="this_year">Este Ano</button>
+                        </div>
+                        <div class="filter-custom-date">
+                            <label for="attendants-date-start">Período:</label>
+                            <input type="date" id="attendants-date-start" name="attendants-date-start">
+                            <span>até</span>
+                            <input type="date" id="attendants-date-end" name="attendants-date-end">
+                            <button class="filter-apply-btn">Aplicar</button>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <h3 class="table-title">Ranking de Atendentes (Vendas Pagas)</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Posição</th>
+                                    <th>Atendente</th>
+                                    <th>Valor Total Pago (R$)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ranking-atendentes-tbody">
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 

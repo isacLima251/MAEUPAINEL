@@ -9,162 +9,202 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-
-    <div class="sidebar">
-        <div class="sidebar-header"><h3>Meu Painel</h3></div>
-        <ul class="sidebar-menu">
-            <li class="menu-item active"><a href="#" data-target="page-resumo" data-title="Visão Geral do Resumo"><i class="fas fa-chart-pie"></i><span>Resumo</span></a></li>
-            <li class="menu-item"><a href="#" data-target="page-vendas" data-title="Minhas Vendas"><i class="fas fa-dollar-sign"></i><span>Vendas</span></a></li>
-            <li class="menu-item"><a href="#" data-target="page-integracao" data-title="Configurar Integração"><i class="fas fa-cogs"></i><span>Integração</span></a></li>
-            <li class="menu-item"><a href="#" data-target="page-configuracao" data-title="Configurações da Conta"><i class="fas fa-user-cog"></i><span>Configuração</span></a></li>
-        </ul>
+    <div id="login-page" class="login-page">
+        <div class="login-card">
+            <h1 class="login-title">Meu Painel</h1>
+            <form id="login-form" class="login-form">
+                <div class="login-field">
+                    <label for="login-username">Usuário</label>
+                    <input type="text" id="login-username" autocomplete="username" required>
+                </div>
+                <div class="login-field">
+                    <label for="login-password">Senha</label>
+                    <input type="password" id="login-password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="action-button login-btn">
+                    <i class="fas fa-sign-in-alt"></i> Entrar
+                </button>
+            </form>
+        </div>
     </div>
 
-    <div class="main-content">
-        <header class="main-header">
-            <h2 id="main-page-title">Visão Geral do Resumo</h2>
-            <div class="user-info"><i class="fas fa-user-circle"></i></div>
-        </header>
-        
-        <div class="content-area">
+    <div id="app-container" class="app-container hidden">
+        <div class="sidebar">
+            <div class="sidebar-header"><h3>Meu Painel</h3></div>
+            <ul class="sidebar-menu">
+                <li class="menu-item active"><a href="#" data-target="page-resumo" data-title="Visão Geral do Resumo"><i class="fas fa-chart-pie"></i><span>Resumo</span></a></li>
+                <li class="menu-item"><a href="#" data-target="page-vendas" data-title="Minhas Vendas"><i class="fas fa-dollar-sign"></i><span>Vendas</span></a></li>
+                <li class="menu-item"><a href="#" data-target="page-integracao" data-title="Configurar Integração"><i class="fas fa-cogs"></i><span>Integração</span></a></li>
+                <li class="menu-item"><a href="#" data-target="page-configuracao" data-title="Configurações da Conta"><i class="fas fa-user-cog"></i><span>Configuração</span></a></li>
+            </ul>
+        </div>
 
-            <div class="page active" id="page-resumo">
-                
-                <div class="filter-bar">
-                    <div class="filter-buttons">
-                        <button class="filter-btn active" data-period="today">Hoje</button>
-                        <button class="filter-btn" data-period="this_month">Este Mês</button>
-                        <button class="filter-btn" data-period="last_month">Mês Passado</button>
-                        <button class="filter-btn" data-period="this_year">Este Ano</button>
-                    </div>
+        <div class="main-content">
+            <header class="main-header">
+                <h2 id="main-page-title">Visão Geral do Resumo</h2>
+                <div class="header-actions">
+                    <button class="action-button logout-button" id="logout-button">
+                        <i class="fas fa-sign-out-alt"></i> Sair
+                    </button>
+                    <div class="user-info"><i class="fas fa-user-circle"></i></div>
+                </div>
+            </header>
 
-                    <div class="filter-select-group"> 
-                        <label for="summary-attendant-select">Atendente:</label>
-                        <select id="summary-attendant-select">
-                            <option value="todos">Todos</option>
-                        </select>
-                    </div>
-                    <div class="filter-custom-date">
-                        <label for="date-range">Período:</label>
-                        <input type="date" id="date-start" name="date-start">
-                        <span>até</span>
-                        <input type="date" id="date-end" name="date-end">
-                        <button class="filter-apply-btn">Aplicar</button>
-                    </div>
-                </div>
-
-                <div class="cards-container">
-                    <div class="card"><div class="card-icon blue"><i class="fas fa-calendar-alt"></i></div><div class="card-info"><span class="card-title">Agendado no Mês</span><span class="card-value">R$ 0,00</span></div></div>
-                    <div class="card"><div class="card-icon green"><i class="fas fa-check-circle"></i></div><div class="card-info"><span class="card-title">Pago (do Agendado)</span><span class="card-value">R$ 0,00</span></div></div>
-                    <div class="card"><div class="card-icon yellow"><i class="fas fa-hourglass-half"></i></div><div class="card-info"><span class="card-title">A Receber (Agendado)</span><span class="card-value">R$ 0,00</span></div></div>
-                    <div class="card"><div class="card-icon red"><i class="fas fa-times-circle"></i></div><div class="card-info"><span class="card-title">Frustrado (Agendado)</span><span class="card-value">R$ 0,00</span></div></div>
-                    <div class="card"><div class="card-icon green"><i class="fas fa-cash-register"></i></div><div class="card-info"><span class="card-title">Vendas Diretas</span><span class="card-value">R$ 0,00</span></div></div>
-                    <div class="card"><div class="card-icon orange"><i class="fas fa-wallet"></i></div><div class="card-info"><span class="card-title">Investimento Total</span><span class="card-value">R$ 0,00</span></div></div>
-                    <div class="card"><div class="card-icon green"><i class="fas fa-chart-line"></i></div><div class="card-info"><span class="card-title">Lucro do Mês</span><span class="card-value">R$ 0,00</span></div></div>
-                    <div class="card"><div class="card-icon blue"><i class="fas fa-percentage"></i></div><div class="card-info"><span class="card-title">ROI</span><span class="card-value">0,0%</span></div></div>
-                </div>
-                
-                <div class="charts-container">
-                    <div class="chart-box"><h4 class="chart-title">Funil do Mês (Agendado)</h4><canvas id="funilChart"></canvas></div>
-                    <div class="chart-box"><h4 class="chart-title">Composição do Agendado</h4><canvas id="composicaoChart"></canvas></div>
-                </div>
-
-            </div> <div class="page" id="page-vendas">
-                <div class="filter-bar">
-                    <div class="search-box"><i class="fas fa-search"></i><input type="text" id="sales-search" placeholder="Pesquisar por nome, email ou CPF..."></div>
-                    <div class="filter-select-group"><label for="status-select">Status:</label><select id="status-select"><option value="todos">Todos</option><option value="pago">Pago</option><option value="agendado">Agendado</option><option value="cobranca">Em Cobrança</option><option value="frustrado">Frustrado</option></select></div>
-                    <div class="filter-select-group"><label for="sales-attendant-select">Atendente:</label><select id="sales-attendant-select"><option value="todos">Todos</option></select></div>
-                </div>
-                <div class="sales-summary-bar">
-                    <div class="summary-card"><span class="summary-title">Vendas Encontradas</span><span class="summary-value" id="sales-count">0</span></div>
-                    <div class="summary-card"><span class="summary-title">Valor Total (Filtro)</span><span class="summary-value" id="sales-total-value">R$ 0,00</span></div>
-                </div>
-                <div class="table-container">
-                    <h3 class="table-title">Todas as Vendas</h3>
-                    <table>
-                        <thead><tr><th>Cliente</th><th>Produto</th><th>Atendente</th><th>Data Agendada</th><th>Valor (R$)</th><th>Status</th><th>Ações</th></tr></thead>
-                        <tbody>
-                        </tbody>
-                    </table>
-                </div>
-            </div> <div class="page" id="page-integracao">
-                    <div class="integration-box"><h3 class="integration-title">Configuração de Postback (Braip)</h3><p class="integration-description">Este é o seu URL de Postback único. Copie este link e cole-o na secção "Postback" dentro das configurações do seu produto na Braip.</p><div class="postback-url-container"><input type="text" value="" id="postback-url" readonly><button class="action-button" id="copy-url-btn"><i class="fas fa-copy"></i> Copiar</button></div></div>
-                <div class="integration-box"><h3 class="integration-title">Como Configurar na Braip</h3><p class="integration-description">Siga estes passos para que a Braip envie as atualizações de status automaticamente para o seu painel.</p><ol class="instructions-list"><li>Aceda à sua conta da Braip.</li><li>Vá para "Produtos" e selecione o produto que deseja integrar.</li><li>No menu lateral do produto, procure por "Configurações" e depois "Postback".</li><li>Cole o URL acima no campo "URL de Postback".</li><li>Na secção "Eventos", selecione **todos** os status que deseja acompanhar. O nosso painel usa principalmente estes:<ul class="event-list"><li><i class="fas fa-check"></i> Pagamento Aprovado</li><li><i class="fas fa-check"></i> Agendado</li><li><i class="fas fa-check"></i> Frustrada</li><li><i class="fas fa-check"></i> Cancelada</li><li><i class="fas fa-check"></i> Devolvida</li><li><i class="fas fa-check"></i> Chargeback</li></ul></li><li>Salve as alterações. A partir desse momento, as novas vendas e atualizações de status aparecerão automaticamente no seu painel.</li></ol></div>
-            </div> <div class="page" id="page-configuracao">
-                <div class="config-box"><h3 class="config-title">Gerenciar Atendentes</h3>
-
-                    <div class="add-attendant-form">
-                        <div class="form-group inline"> <label for="add-attendant-name" class="form-label">Nome:</label>
-                            <input type="text" id="add-attendant-name" class="form-input" placeholder="Ex: João Silva">
+            <div class="content-area">
+                <div class="page active" id="page-resumo">
+                    <div class="filter-bar">
+                        <div class="filter-buttons">
+                            <button class="filter-btn active" data-period="today">Hoje</button>
+                            <button class="filter-btn" data-period="this_month">Este Mês</button>
+                            <button class="filter-btn" data-period="last_month">Mês Passado</button>
+                            <button class="filter-btn" data-period="this_year">Este Ano</button>
                         </div>
-                        <div class="form-group inline">
-                            <label for="add-attendant-code" class="form-label">Código (4 chars):</label>
-                            <input type="text" id="add-attendant-code" class="form-input" placeholder="Ex: ABCD" maxlength="4">
+
+                        <div class="filter-select-group">
+                            <label for="summary-attendant-select">Atendente:</label>
+                            <select id="summary-attendant-select">
+                                <option value="todos">Todos</option>
+                            </select>
                         </div>
-                        <div class="form-group inline">
-                            <label for="add-attendant-cost" class="form-label">Gasto Mensal (R$):</label>
-                            <input type="number" id="add-attendant-cost" class="form-input" placeholder="Ex: 500.00" value="0">
+                        <div class="filter-custom-date">
+                            <label for="date-range">Período:</label>
+                            <input type="date" id="date-start" name="date-start">
+                            <span>até</span>
+                            <input type="date" id="date-end" name="date-end">
+                            <button class="filter-apply-btn">Aplicar</button>
                         </div>
-                        <button class="action-button add-btn" id="add-attendant-btn">
-                            <i class="fas fa-plus"></i> Adicionar
-                        </button>
                     </div>
 
-                    <div class="attendants-table-container">
-                        <h4 class="table-subtitle">Atendentes Cadastrados</h4>
-                        <table id="attendants-table">
-                            <thead>
-                                <tr>
-                                    <th>Nome</th>
-                                    <th>Código</th>
-                                    <th>Gasto Mensal</th>
-                                    <th>Ações</th>
-                                    </tr>
-                            </thead>
-                            <tbody id="attendants-table-body">
+                    <div class="cards-container">
+                        <div class="card"><div class="card-icon blue"><i class="fas fa-calendar-alt"></i></div><div class="card-info"><span class="card-title">Agendado no Mês</span><span class="card-value">R$ 0,00</span></div></div>
+                        <div class="card"><div class="card-icon green"><i class="fas fa-check-circle"></i></div><div class="card-info"><span class="card-title">Pago (do Agendado)</span><span class="card-value">R$ 0,00</span></div></div>
+                        <div class="card"><div class="card-icon yellow"><i class="fas fa-hourglass-half"></i></div><div class="card-info"><span class="card-title">A Receber (Agendado)</span><span class="card-value">R$ 0,00</span></div></div>
+                        <div class="card"><div class="card-icon red"><i class="fas fa-times-circle"></i></div><div class="card-info"><span class="card-title">Frustrado (Agendado)</span><span class="card-value">R$ 0,00</span></div></div>
+                        <div class="card"><div class="card-icon green"><i class="fas fa-cash-register"></i></div><div class="card-info"><span class="card-title">Vendas Diretas</span><span class="card-value">R$ 0,00</span></div></div>
+                        <div class="card"><div class="card-icon orange"><i class="fas fa-wallet"></i></div><div class="card-info"><span class="card-title">Investimento Total</span><span class="card-value">R$ 0,00</span></div></div>
+                        <div class="card"><div class="card-icon green"><i class="fas fa-chart-line"></i></div><div class="card-info"><span class="card-title">Lucro do Mês</span><span class="card-value">R$ 0,00</span></div></div>
+                        <div class="card"><div class="card-icon blue"><i class="fas fa-percentage"></i></div><div class="card-info"><span class="card-title">ROI</span><span class="card-value">0,0%</span></div></div>
+                    </div>
+
+                    <div class="charts-container">
+                        <div class="chart-box"><h4 class="chart-title">Funil do Mês (Agendado)</h4><canvas id="funilChart"></canvas></div>
+                        <div class="chart-box"><h4 class="chart-title">Composição do Agendado</h4><canvas id="composicaoChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="page" id="page-vendas">
+                    <div class="filter-bar">
+                        <div class="search-box"><i class="fas fa-search"></i><input type="text" id="sales-search" placeholder="Pesquisar por nome, email ou CPF..."></div>
+                        <div class="filter-select-group"><label for="status-select">Status:</label><select id="status-select"><option value="todos">Todos</option><option value="pago">Pago</option><option value="agendado">Agendado</option><option value="cobranca">Em Cobrança</option><option value="frustrado">Frustrado</option></select></div>
+                        <div class="filter-select-group"><label for="sales-attendant-select">Atendente:</label><select id="sales-attendant-select"><option value="todos">Todos</option></select></div>
+                    </div>
+                    <div class="sales-summary-bar">
+                        <div class="summary-card"><span class="summary-title">Vendas Encontradas</span><span class="summary-value" id="sales-count">0</span></div>
+                        <div class="summary-card"><span class="summary-title">Valor Total (Filtro)</span><span class="summary-value" id="sales-total-value">R$ 0,00</span></div>
+                    </div>
+                    <div class="table-container">
+                        <h3 class="table-title">Todas as Vendas</h3>
+                        <table>
+                            <thead><tr><th>Cliente</th><th>Produto</th><th>Atendente</th><th>Data Agendada</th><th>Valor (R$)</th><th>Status</th><th>Ações</th></tr></thead>
+                            <tbody>
                             </tbody>
                         </table>
                     </div>
-
-                    <hr class="form-divider"><h3 class="config-title">Configurações Financeiras</h3><div class="form-group"><label for="config-investimento" class="form-label">Investimento Mensal (R$):</label><input type="number" id="config-investimento" class="form-input" value="" placeholder="Ex: 5000.00"><p class="form-hint">Este valor será usado para calcular o Lucro e o ROI na página "Resumo".</p></div><div class="form-group"><button class="action-button save-btn"><i class="fas fa-save"></i> Salvar Alterações</button></div></div>
-            </div> </div> </div> <div class="modal-overlay" id="modal-detalhes">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Detalhes da Venda</h3>
-                <button class="modal-close-btn" id="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="detalhe-item"><strong>Cliente:</strong><span id="modal-cliente"></span></div>
-                <div class="detalhe-item"><strong>Email:</strong><span id="modal-email"></span></div>
-                <div class="detalhe-item"><strong>Telefone:</strong><span id="modal-telefone"></span></div>
-                <div class="detalhe-item"><strong>CPF:</strong><span id="modal-cpf"></span></div>
-                <div class="detalhe-item">
-                    <strong>Atendente:</strong>
-                    <span id="modal-atendente-display" class="editable-attendant"></span> 
-                    <select id="modal-atendente-select" class="editable-attendant form-input" style="display: none; width: auto;">
-                        <option value="" disabled selected>-- Atribuir --</option>
-                    </select>
-                </div> 
-                <hr>
-                <div class="detalhe-item"><strong>Produto:</strong><span id="modal-produto"></span></div>
-                <div class="detalhe-item"><strong>Valor:</strong><span id="modal-valor"></span></div>
-                <div class="detalhe-item"><strong>Status:</strong><span id="modal-status-container"></span></div>
-                <div class="detalhe-item"><strong>Data Agendada:</strong><span id="modal-data"></span></div>
-                <div class="modal-manual-actions">
-                    <hr>
-                    <p>Ações Manuais:</p>
-                    <button class="action-button manual-status-btn green-btn" data-status="pago">
-                        <i class="fas fa-check-circle"></i> Marcar como Pago
-                    </button>
-                    <button class="action-button manual-status-btn red-btn" data-status="frustrado">
-                        <i class="fas fa-times-circle"></i> Marcar como Frustrado
-                    </button>
-                    <input type="hidden" id="modal-current-transaction-id" value="">
                 </div>
-                <h4>Histórico de Pagamentos:</h4>
-                <ul class="historico-lista" id="modal-historico"></ul>
+
+                <div class="page" id="page-integracao">
+                    <div class="integration-box"><h3 class="integration-title">Configuração de Postback (Braip)</h3><p class="integration-description">Este é o seu URL de Postback único. Copie este link e cole-o na secção "Postback" dentro das configurações do seu produto na Braip.</p><div class="postback-url-container"><input type="text" value="" id="postback-url" readonly><button class="action-button" id="copy-url-btn"><i class="fas fa-copy"></i> Copiar</button></div></div>
+                    <div class="integration-box"><h3 class="integration-title">Como Configurar na Braip</h3><p class="integration-description">Siga estes passos para que a Braip envie as atualizações de status automaticamente para o seu painel.</p><ol class="instructions-list"><li>Aceda à sua conta da Braip.</li><li>Vá para "Produtos" e selecione o produto que deseja integrar.</li><li>No menu lateral do produto, procure por "Configurações" e depois "Postback".</li><li>Cole o URL acima no campo "URL de Postback".</li><li>Na secção "Eventos", selecione <strong>todos</strong> os status que deseja acompanhar. O nosso painel usa principalmente estes:<ul class="event-list"><li><i class="fas fa-check"></i> Pagamento Aprovado</li><li><i class="fas fa-check"></i> Agendado</li><li><i class="fas fa-check"></i> Frustrada</li><li><i class="fas fa-check"></i> Cancelada</li><li><i class="fas fa-check"></i> Devolvida</li><li><i class="fas fa-check"></i> Chargeback</li></ul></li><li>Salve as alterações. A partir desse momento, as novas vendas e atualizações de status aparecerão automaticamente no seu painel.</li></ol></div>
+                </div>
+
+                <div class="page" id="page-configuracao">
+                    <div class="config-box"><h3 class="config-title">Gerenciar Atendentes</h3>
+
+                        <div class="add-attendant-form">
+                            <div class="form-group inline"> <label for="add-attendant-name" class="form-label">Nome:</label>
+                                <input type="text" id="add-attendant-name" class="form-input" placeholder="Ex: João Silva">
+                            </div>
+                            <div class="form-group inline">
+                                <label for="add-attendant-code" class="form-label">Código (4 chars):</label>
+                                <input type="text" id="add-attendant-code" class="form-input" placeholder="Ex: ABCD" maxlength="4">
+                            </div>
+                            <div class="form-group inline">
+                                <label for="add-attendant-cost" class="form-label">Gasto Mensal (R$):</label>
+                                <input type="number" id="add-attendant-cost" class="form-input" placeholder="Ex: 500.00" value="0">
+                            </div>
+                            <button class="action-button add-btn" id="add-attendant-btn">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+
+                        <div class="attendants-table-container">
+                            <h4 class="table-subtitle">Atendentes Cadastrados</h4>
+                            <table id="attendants-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Código</th>
+                                        <th>Gasto Mensal</th>
+                                        <th>Ações</th>
+                                        </tr>
+                                </thead>
+                                <tbody id="attendants-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <hr class="form-divider"><h3 class="config-title">Configurações Financeiras</h3><div class="form-group"><label for="config-investimento" class="form-label">Investimento Mensal (R$):</label><input type="number" id="config-investimento" class="form-input" value="" placeholder="Ex: 5000.00"><p class="form-hint">Este valor será usado para calcular o Lucro e o ROI na página "Resumo".</p></div><div class="form-group"><button class="action-button save-btn"><i class="fas fa-save"></i> Salvar Alterações</button></div></div>
+                </div>
             </div>
         </div>
-    </div> <script src="script.js"></script>
+
+        <div class="modal-overlay" id="modal-detalhes">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Detalhes da Venda</h3>
+                    <button class="modal-close-btn" id="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="detalhe-item"><strong>Cliente:</strong><span id="modal-cliente"></span></div>
+                    <div class="detalhe-item"><strong>Email:</strong><span id="modal-email"></span></div>
+                    <div class="detalhe-item"><strong>Telefone:</strong><span id="modal-telefone"></span></div>
+                    <div class="detalhe-item"><strong>CPF:</strong><span id="modal-cpf"></span></div>
+                    <div class="detalhe-item">
+                        <strong>Atendente:</strong>
+                        <span id="modal-atendente-display" class="editable-attendant"></span>
+                        <select id="modal-atendente-select" class="editable-attendant form-input" style="display: none; width: auto;">
+                            <option value="" disabled selected>-- Atribuir --</option>
+                        </select>
+                    </div>
+                    <hr>
+                    <div class="detalhe-item"><strong>Produto:</strong><span id="modal-produto"></span></div>
+                    <div class="detalhe-item"><strong>Valor:</strong><span id="modal-valor"></span></div>
+                    <div class="detalhe-item"><strong>Status:</strong><span id="modal-status-container"></span></div>
+                    <div class="detalhe-item"><strong>Data Agendada:</strong><span id="modal-data"></span></div>
+                    <div class="modal-manual-actions">
+                        <hr>
+                        <p>Ações Manuais:</p>
+                        <button class="action-button manual-status-btn green-btn" data-status="pago">
+                            <i class="fas fa-check-circle"></i> Marcar como Pago
+                        </button>
+                        <button class="action-button manual-status-btn red-btn" data-status="frustrado">
+                            <i class="fas fa-times-circle"></i> Marcar como Frustrado
+                        </button>
+                        <input type="hidden" id="modal-current-transaction-id" value="">
+                    </div>
+                    <h4>Histórico de Pagamentos:</h4>
+                    <ul class="historico-lista" id="modal-historico"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="global-spinner" class="global-spinner hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="script.js"></script>
 </body>
 </html>

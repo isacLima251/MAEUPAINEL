@@ -29,6 +29,14 @@ let modalCurrentTransactionIdInput = null;
 let attendantsTableBodyEl = null;
 let attendantsTableData = [];
 
+let loginPage = null;
+let loginForm = null;
+let appContainer = null;
+let logoutButton = null;
+let globalSpinner = null;
+let toastContainer = null;
+let activeRequests = 0;
+
 let currentSummaryPeriod = 'today';
 
 const SUMMARY_CUSTOM_PERIOD_KEY = 'custom';
@@ -48,14 +56,17 @@ document.addEventListener('DOMContentLoaded', () => {
     setupModal();
     setupEventListeners();
     initializeCharts();
-
-    initData().catch((error) => {
-        console.error('Erro ao carregar dados iniciais:', error);
-        alert('Não foi possível carregar os dados iniciais. Verifique sua conexão com a API.');
-    });
+    setupAuth();
 });
 
 function cacheDomElements() {
+    loginPage = document.getElementById('login-page');
+    loginForm = document.getElementById('login-form');
+    appContainer = document.getElementById('app-container');
+    logoutButton = document.getElementById('logout-button');
+    globalSpinner = document.getElementById('global-spinner');
+    toastContainer = document.getElementById('toast-container');
+
     summaryFilterButtons = Array.from(document.querySelectorAll('#page-resumo .filter-btn'));
     summaryAttendantSelect = document.getElementById('summary-attendant-select');
     summaryCustomStartInput = document.getElementById('date-start');
@@ -128,6 +139,214 @@ function resetSummaryFiltersToDefault() {
     currentSummaryPeriod = 'today';
     setActiveSummaryButtonByPeriod('today');
     clearCustomDateInputs();
+}
+
+function getStoredToken() {
+    return localStorage.getItem('authToken');
+}
+
+function setAuthToken(token) {
+    if (token) {
+        localStorage.setItem('authToken', token);
+    }
+}
+
+function clearAuthToken() {
+    localStorage.removeItem('authToken');
+}
+
+function showApp() {
+    if (loginPage) {
+        loginPage.classList.add('hidden');
+    }
+    if (appContainer) {
+        appContainer.classList.remove('hidden');
+    }
+}
+
+function showLogin() {
+    if (appContainer) {
+        appContainer.classList.add('hidden');
+    }
+    if (loginPage) {
+        loginPage.classList.remove('hidden');
+    }
+}
+
+function setupAuth() {
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const username = loginForm.querySelector('#login-username')?.value.trim();
+            const password = loginForm.querySelector('#login-password')?.value;
+
+            if (!username || !password) {
+                showToast('Informe usuário e senha para continuar.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetchJson('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    skipAuth: true
+                });
+
+                if (!response?.token) {
+                    throw new Error('Resposta inválida do servidor.');
+                }
+
+                setAuthToken(response.token);
+                showToast('Login realizado com sucesso!', 'success');
+                showApp();
+                await initData();
+            } catch (error) {
+                console.error('Erro ao realizar login:', error);
+                showToast(error.message || 'Não foi possível realizar o login.', 'error');
+            }
+        });
+    }
+
+    if (logoutButton) {
+        logoutButton.addEventListener('click', () => {
+            clearAuthToken();
+            showToast('Sessão encerrada com sucesso.', 'success');
+            showLogin();
+        });
+    }
+
+    const storedToken = getStoredToken();
+    if (storedToken) {
+        showApp();
+        initData().catch((error) => {
+            console.error('Erro ao carregar dados iniciais:', error);
+            showToast('Não foi possível carregar os dados iniciais. Verifique sua conexão com a API.', 'error');
+        });
+    } else {
+        showLogin();
+    }
+}
+
+function showGlobalSpinner() {
+    activeRequests += 1;
+    if (globalSpinner && activeRequests > 0) {
+        globalSpinner.classList.remove('hidden');
+    }
+}
+
+function hideGlobalSpinner() {
+    activeRequests = Math.max(0, activeRequests - 1);
+    if (globalSpinner && activeRequests === 0) {
+        globalSpinner.classList.add('hidden');
+    }
+}
+
+function showToast(message, type = 'info') {
+    if (!toastContainer) {
+        console.log(message);
+        return;
+    }
+
+    const toast = document.createElement('div');
+    toast.classList.add('toast');
+
+    if (type === 'success') {
+        toast.classList.add('toast-success');
+    } else if (type === 'error') {
+        toast.classList.add('toast-error');
+    } else {
+        toast.style.background = 'linear-gradient(135deg, #5d5fef, #7a7cff)';
+    }
+
+    const icon = document.createElement('i');
+    icon.className = type === 'success'
+        ? 'fas fa-check-circle'
+        : type === 'error'
+            ? 'fas fa-exclamation-circle'
+            : 'fas fa-info-circle';
+
+    const text = document.createElement('span');
+    text.textContent = message;
+
+    toast.appendChild(icon);
+    toast.appendChild(text);
+
+    toastContainer.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('hidden');
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+function handleUnauthorized() {
+    if (getStoredToken()) {
+        showToast('Sua sessão expirou. Faça login novamente.', 'error');
+    }
+    clearAuthToken();
+    showLogin();
+}
+
+async function fetchJson(url, options = {}) {
+    const { skipAuth, ...fetchOptions } = options || {};
+    const requestOptions = {
+        headers: {},
+        ...fetchOptions
+    };
+
+    requestOptions.headers = new Headers(requestOptions.headers);
+
+    if (!skipAuth) {
+        const token = getStoredToken();
+        if (token) {
+            requestOptions.headers.set('Authorization', `Bearer ${token}`);
+        }
+    }
+
+    if (requestOptions.body && !requestOptions.headers.has('Content-Type')) {
+        requestOptions.headers.set('Content-Type', 'application/json');
+    }
+
+    if (
+        requestOptions.body !== undefined &&
+        requestOptions.body !== null &&
+        requestOptions.headers.get('Content-Type') === 'application/json' &&
+        typeof requestOptions.body !== 'string'
+    ) {
+        requestOptions.body = JSON.stringify(requestOptions.body);
+    }
+
+    const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+
+    showGlobalSpinner();
+
+    try {
+        const response = await fetch(fullUrl, requestOptions);
+
+        if (response.status === 401) {
+            handleUnauthorized();
+            throw new Error('Acesso não autorizado.');
+        }
+
+        if (response.status === 204) {
+            return null;
+        }
+
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
+            const errorMessage = data?.message || 'Erro ao comunicar com o servidor.';
+            throw new Error(errorMessage);
+        }
+
+        return data;
+    } catch (error) {
+        throw error;
+    } finally {
+        hideGlobalSpinner();
+    }
 }
 
 async function initData() {
@@ -242,7 +461,7 @@ function setupCopyButton() {
             }, 2000);
         } catch (error) {
             console.error('Falha ao copiar URL:', error);
-            alert('Erro ao copiar o URL. Por favor, copie manualmente.');
+            showToast('Erro ao copiar o URL. Por favor, copie manualmente.', 'error');
         }
     });
 }
@@ -415,7 +634,7 @@ async function loadAttendants() {
         }
     } catch (error) {
         console.error('Erro ao carregar atendentes:', error);
-        alert('Não foi possível carregar a lista de atendentes.');
+        showToast('Não foi possível carregar a lista de atendentes.', 'error');
         listaAtendentes = [{ code: 'nao_definido', name: 'Não Definido', monthlyCost: 0 }];
         populateAttendantDropdowns();
     }
@@ -478,7 +697,7 @@ async function loadSettingsData() {
         displaySettings(settings);
     } catch (error) {
         console.error('Erro ao carregar configurações:', error);
-        alert('Não foi possível carregar as configurações.');
+        showToast('Não foi possível carregar as configurações.', 'error');
     }
 }
 
@@ -515,7 +734,7 @@ async function loadPostbackUrl() {
         displayPostbackUrl(data);
     } catch (error) {
         console.error('Erro ao carregar URL de postback:', error);
-        alert('Não foi possível carregar o URL de postback.');
+        showToast('Não foi possível carregar o URL de postback.', 'error');
     }
 }
 
@@ -593,7 +812,7 @@ async function loadAttendantsTable() {
         });
     } catch (error) {
         console.error('Erro ao carregar tabela de atendentes:', error);
-        alert('Não foi possível carregar a tabela de atendentes.');
+        showToast('Não foi possível carregar a tabela de atendentes.', 'error');
         attendantsTableData = [];
     }
 }
@@ -607,12 +826,12 @@ async function updateSummaryData() {
         const endDate = summaryCustomEndInput ? summaryCustomEndInput.value : '';
 
         if (!startDate || !endDate) {
-            alert('Selecione uma data inicial e final para aplicar o filtro personalizado.');
+            showToast('Selecione uma data inicial e final para aplicar o filtro personalizado.', 'error');
             return;
         }
 
         if (startDate > endDate) {
-            alert('A data inicial não pode ser maior que a data final.');
+            showToast('A data inicial não pode ser maior que a data final.', 'error');
             return;
         }
 
@@ -631,7 +850,7 @@ async function updateSummaryData() {
         updateSummaryCharts(summary);
     } catch (error) {
         console.error('Erro ao carregar dados de resumo:', error);
-        alert('Não foi possível carregar os dados do resumo.');
+        showToast('Não foi possível carregar os dados do resumo.', 'error');
     }
 }
 
@@ -789,7 +1008,7 @@ async function loadSalesData(filters = {}) {
         rebindModalButtons();
     } catch (error) {
         console.error('Erro ao carregar vendas:', error);
-        alert('Não foi possível carregar as vendas.');
+        showToast('Não foi possível carregar as vendas.', 'error');
     }
 }
 
@@ -890,7 +1109,7 @@ async function handleAttendantChange(event) {
     const nomeAtendente = select.options[select.selectedIndex]?.text || obterNomeAtendente(novoAtendente);
 
     if (!transactionId || !novoAtendente) {
-        alert('Selecione um atendente válido.');
+        showToast('Selecione um atendente válido.', 'error');
         return;
     }
 
@@ -913,12 +1132,12 @@ async function handleAttendantChange(event) {
             }
         }
 
-        alert('Atendente atualizado com sucesso!');
+        showToast('Atendente atualizado com sucesso!', 'success');
         fecharModal();
         filterSalesTable();
     } catch (error) {
         console.error('Erro ao atualizar atendente da venda:', error);
-        alert('Não foi possível atualizar o atendente.');
+        showToast('Não foi possível atualizar o atendente.', 'error');
     }
 }
 
@@ -930,12 +1149,12 @@ async function handleManualStatusUpdate(event) {
     const transactionId = modalCurrentTransactionIdInput ? modalCurrentTransactionIdInput.value : '';
 
     if (!novoStatus) {
-        alert('Selecione um status válido.');
+        showToast('Selecione um status válido.', 'error');
         return;
     }
 
     if (!transactionId) {
-        alert('Venda não encontrada.');
+        showToast('Venda não encontrada.', 'error');
         return;
     }
 
@@ -945,7 +1164,7 @@ async function handleManualStatusUpdate(event) {
             body: { status: novoStatus }
         });
 
-        alert('Status atualizado com sucesso!');
+        showToast('Status atualizado com sucesso!', 'success');
         fecharModal();
 
         const currentFilters = getCurrentSalesFilters();
@@ -953,7 +1172,7 @@ async function handleManualStatusUpdate(event) {
         await updateSummaryData();
     } catch (error) {
         console.error('Erro ao atualizar status da venda:', error);
-        alert('Não foi possível atualizar o status da venda.');
+        showToast('Não foi possível atualizar o status da venda.', 'error');
     }
 }
 
@@ -973,12 +1192,12 @@ async function addAttendantToTable(event) {
     const monthlyCostValue = Number(attendantCostInput.value || 0);
 
     if (!name || !code) {
-        alert('Por favor, preencha o Nome e o Código do atendente.');
+        showToast('Por favor, preencha o Nome e o Código do atendente.', 'error');
         return;
     }
 
     if (code.length !== 4) {
-        alert('O Código deve ter exatamente 4 caracteres.');
+        showToast('O Código deve ter exatamente 4 caracteres.', 'error');
         return;
     }
 
@@ -993,10 +1212,10 @@ async function addAttendantToTable(event) {
         attendantCostInput.value = '0';
         await loadAttendants();
         await loadAttendantsTable();
-        alert('Atendente adicionado com sucesso!');
+        showToast('Atendente adicionado com sucesso!', 'success');
     } catch (error) {
         console.error('Erro ao adicionar atendente:', error);
-        alert('Não foi possível adicionar o atendente.');
+        showToast('Não foi possível adicionar o atendente.', 'error');
     }
 }
 
@@ -1024,11 +1243,11 @@ async function saveSettings(event) {
             method: 'PUT',
             body
         });
-        alert('Configurações salvas com sucesso!');
+        showToast('Configurações salvas com sucesso!', 'success');
         await updateSummaryData();
     } catch (error) {
         console.error('Erro ao salvar configurações:', error);
-        alert('Não foi possível salvar as configurações.');
+        showToast('Não foi possível salvar as configurações.', 'error');
     }
 }
 
@@ -1066,7 +1285,7 @@ async function handleEditAttendant(attendantCode) {
         listaAtendentes.find((item) => item.code === attendantCode);
 
     if (!attendant) {
-        alert('Não foi possível localizar o atendente selecionado.');
+        showToast('Não foi possível localizar o atendente selecionado.', 'error');
         return;
     }
 
@@ -1076,7 +1295,7 @@ async function handleEditAttendant(attendantCode) {
     }
     const trimmedName = newNameInput.trim();
     if (!trimmedName) {
-        alert('O nome do atendente não pode ficar vazio.');
+        showToast('O nome do atendente não pode ficar vazio.', 'error');
         return;
     }
 
@@ -1086,7 +1305,7 @@ async function handleEditAttendant(attendantCode) {
     }
     const preparedCode = newCodeInput.trim();
     if (preparedCode.length !== 4) {
-        alert('O código deve ter exatamente 4 caracteres.');
+        showToast('O código deve ter exatamente 4 caracteres.', 'error');
         return;
     }
 
@@ -1109,10 +1328,10 @@ async function handleEditAttendant(attendantCode) {
 
         await loadAttendants();
         await loadAttendantsTable();
-        alert('Atendente atualizado com sucesso!');
+        showToast('Atendente atualizado com sucesso!', 'success');
     } catch (error) {
         console.error('Erro ao atualizar atendente:', error);
-        alert('Não foi possível atualizar o atendente.');
+        showToast('Não foi possível atualizar o atendente.', 'error');
     }
 }
 
@@ -1128,10 +1347,10 @@ async function handleDeleteAttendant(attendantCode) {
 
         await loadAttendants();
         await loadAttendantsTable();
-        alert('Atendente removido com sucesso!');
+        showToast('Atendente removido com sucesso!', 'success');
     } catch (error) {
         console.error('Erro ao remover atendente:', error);
-        alert('Não foi possível remover o atendente.');
+        showToast('Não foi possível remover o atendente.', 'error');
     }
 }
 
@@ -1215,37 +1434,4 @@ function formatCurrencyBRL(value) {
     const numeric = Number(value);
     const safeValue = Number.isFinite(numeric) ? numeric : 0;
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeValue);
-}
-
-async function fetchJson(endpoint, options = {}) {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const fetchOptions = {
-        method: options.method || 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers
-        }
-    };
-
-    if (options.body !== undefined) {
-        fetchOptions.body = JSON.stringify(options.body);
-    }
-
-    const response = await fetch(url, fetchOptions);
-
-    if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || `Erro ${response.status}`);
-    }
-
-    if (response.status === 204) {
-        return null;
-    }
-
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-        return response.json();
-    }
-
-    return response.text();
 }

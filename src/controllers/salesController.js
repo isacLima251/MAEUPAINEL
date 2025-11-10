@@ -23,7 +23,8 @@ const listSales = (db) => (req, res) => {
       raw_payload,
       attendant_code,
       attendant_name,
-      campaign_code
+      campaign_code,
+      campaign_name
     FROM sales
     ORDER BY datetime(created_at) DESC
   `;
@@ -128,7 +129,8 @@ const updateSaleStatus = (db) => (req, res) => {
           raw_payload,
           attendant_code,
           attendant_name,
-          campaign_code
+          campaign_code,
+          campaign_name
         FROM sales
         WHERE transaction_id = ?`,
         [transactionId],

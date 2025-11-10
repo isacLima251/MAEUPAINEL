@@ -3,6 +3,7 @@ const cors = require('cors');
 const { initializeDatabase } = require('./database');
 const createSalesRoutes = require('./routes/sales');
 const createAttendantRoutes = require('./routes/attendants');
+const createCampaignRoutes = require('./routes/campaigns');
 const createSettingsRoutes = require('./routes/settings');
 const createSummaryRoutes = require('./routes/summary');
 const createPostbackRoutes = require('./routes/postback');
@@ -22,6 +23,7 @@ const createApp = (options = {}) => {
   app.use('/api', authenticateToken);
   app.use('/api', createSalesRoutes(db));
   app.use('/api', createAttendantRoutes(db));
+  app.use('/api', createCampaignRoutes(db));
   app.use('/api', createSettingsRoutes(db));
   app.use('/api', createSummaryRoutes(db));
 

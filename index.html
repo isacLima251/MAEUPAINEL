@@ -153,6 +153,42 @@
                             </table>
                         </div>
 
+                        <hr class="form-divider"><h3 class="config-title">Gerenciar Campanhas</h3>
+
+                        <div class="add-campaign-form">
+                            <div class="form-group inline">
+                                <label for="add-campaign-name" class="form-label">Nome da Campanha:</label>
+                                <input type="text" id="add-campaign-name" class="form-input" placeholder="Ex: Criativo 1 - Vídeo" maxlength="120">
+                            </div>
+                            <div class="form-group inline">
+                                <label for="add-campaign-code" class="form-label">Código (até 10 chars):</label>
+                                <div class="input-with-button">
+                                    <input type="text" id="add-campaign-code" class="form-input" placeholder="Ex: fbads" maxlength="10">
+                                    <button type="button" class="action-button generate-btn" id="generate-campaign-code-btn" title="Gerar código aleatório">
+                                        <i class="fas fa-magic"></i> Gerar
+                                    </button>
+                                </div>
+                            </div>
+                            <button class="action-button add-btn" id="add-campaign-btn">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+
+                        <div class="campaigns-table-container">
+                            <h4 class="table-subtitle">Campanhas Cadastradas</h4>
+                            <table id="campaigns-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Código</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="campaigns-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+
                         <hr class="form-divider"><h3 class="config-title">Configurações Financeiras</h3><div class="form-group"><label for="config-investimento" class="form-label">Investimento Mensal (R$):</label><input type="number" id="config-investimento" class="form-input" value="" placeholder="Ex: 5000.00"><p class="form-hint">Este valor será usado para calcular o Lucro e o ROI na página "Resumo".</p></div><div class="form-group"><button class="action-button save-btn"><i class="fas fa-save"></i> Salvar Alterações</button></div></div>
                 </div>
             </div>

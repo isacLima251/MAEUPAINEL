@@ -40,7 +40,8 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
         raw_payload TEXT,
         attendant_code TEXT,
         attendant_name TEXT,
-        campaign_code TEXT
+        campaign_code TEXT,
+        campaign_name TEXT
       )`
     );
 
@@ -64,6 +65,7 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
       ensureColumn('attendant_code');
       ensureColumn('attendant_name');
       ensureColumn('campaign_code');
+      ensureColumn('campaign_name');
     });
 
     db.run(
@@ -71,6 +73,13 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
         code TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         monthly_cost REAL DEFAULT 0
+      )`
+    );
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS campaigns (
+        code TEXT PRIMARY KEY,
+        name TEXT NOT NULL
       )`
     );
 

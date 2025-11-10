@@ -123,6 +123,8 @@ test('POST /api/postback stores the sale and GET /api/sales returns it', { concu
   assert.equal(listResponse.body[0].client_name, payload.client_name);
   assert.equal(listResponse.body[0].client_cpf, payload.client_cpf);
   assert.equal(listResponse.body[0].client_phone, payload.client_phone);
+  assert.equal(listResponse.body[0].campaign_code, 'nao_definida');
+  assert.equal(listResponse.body[0].campaign_name, 'nao_definida');
   assert.equal(listResponse.body[0].valor_formatado, 'R$ 50,00');
   assert.equal(listResponse.body[0].status_css_class, 'agendado');
   assert.equal(listResponse.body[0].data_formatada, '01/10/2023');
@@ -215,9 +217,44 @@ test('POST /api/postback identifies attendant from email prefix', { concurrency:
   const [sale] = listResponse.body;
   assert.equal(sale.attendant_code, 'joao');
   assert.equal(sale.attendant_name, 'João');
+  assert.equal(sale.campaign_code, 'nao_definida');
+  assert.equal(sale.campaign_name, 'nao_definida');
   assert.equal(sale.valor_formatado, 'R$ 1.500,00');
   assert.equal(sale.status_css_class, 'pago');
   assert.equal(sale.data_formatada, '02/01/2024');
+
+  await closeDatabase(db);
+});
+
+test('POST /api/postback stores campaign name when mapping exists', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
+
+  const createCampaignResponse = await auth
+    .post('/api/campaigns')
+    .send({ code: 'fbads', name: 'Criativo 1 - Video Gato' });
+  assert.equal(createCampaignResponse.statusCode, 201);
+
+  const payload = {
+    transaction_id: 'campaign-mapped',
+    status_code: 2,
+    status_text: 'Agendado',
+    client_email: 'code.fbads@example.com',
+    product_name: 'Produto com Campanha',
+    total_value_cents: 10000,
+    created_at: '2024-03-01 12:00:00',
+    updated_at: '2024-03-01 12:00:00'
+  };
+
+  const postResponse = await request(app).post('/api/postback').send(payload);
+  assert.equal(postResponse.statusCode, 201);
+
+  const listResponse = await auth.get('/api/sales');
+  assert.equal(listResponse.statusCode, 200);
+  const [sale] = listResponse.body;
+  assert.equal(sale.campaign_code, 'fbads');
+  assert.equal(sale.campaign_name, 'Criativo 1 - Video Gato');
 
   await closeDatabase(db);
 });
@@ -397,6 +434,41 @@ test('GET /api/attendants returns an empty list when database is empty', { concu
   const response = await auth.get('/api/attendants');
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, []);
+
+  await closeDatabase(db);
+});
+
+test('Campaign management endpoints allow CRUD operations', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
+
+  const createResponse = await auth
+    .post('/api/campaigns')
+    .send({ code: 'fbads', name: 'Campanha Facebook' });
+  assert.equal(createResponse.statusCode, 201);
+  assert.deepEqual(createResponse.body, { code: 'fbads', name: 'Campanha Facebook' });
+
+  const listResponse = await auth.get('/api/campaigns');
+  assert.equal(listResponse.statusCode, 200);
+  assert.deepEqual(listResponse.body, [{ code: 'fbads', name: 'Campanha Facebook' }]);
+
+  const updateResponse = await auth
+    .put('/api/campaigns/fbads')
+    .send({ name: 'Campanha Facebook Atualizada', newCode: 'fbnew' });
+  assert.equal(updateResponse.statusCode, 200);
+  assert.deepEqual(updateResponse.body, { code: 'fbnew', name: 'Campanha Facebook Atualizada' });
+
+  const listAfterUpdate = await auth.get('/api/campaigns');
+  assert.equal(listAfterUpdate.statusCode, 200);
+  assert.deepEqual(listAfterUpdate.body, [{ code: 'fbnew', name: 'Campanha Facebook Atualizada' }]);
+
+  const deleteResponse = await auth.delete('/api/campaigns/fbnew');
+  assert.equal(deleteResponse.statusCode, 204);
+
+  const listAfterDelete = await auth.get('/api/campaigns');
+  assert.equal(listAfterDelete.statusCode, 200);
+  assert.deepEqual(listAfterDelete.body, []);
 
   await closeDatabase(db);
 });

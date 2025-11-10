@@ -1,5 +1,6 @@
 const DEFAULT_ATTENDANT = { code: 'nao_definido', name: 'Não Definido' };
 const DEFAULT_CAMPAIGN_CODE = 'nao_definida';
+const MAX_CAMPAIGN_CODE_LENGTH = 10;
 
 const SUMMARY_PERIODS = new Set(['today', 'this_week', 'this_month', 'last_month', 'this_year']);
 
@@ -12,6 +13,23 @@ const normalizeAttendantCode = (code) => {
 
   const trimmed = String(code).trim().toLowerCase();
   return trimmed ? trimmed : null;
+};
+
+const normalizeCampaignCode = (code) => {
+  if (!code && code !== 0) {
+    return null;
+  }
+
+  const trimmed = String(code).trim().toLowerCase();
+  return trimmed ? trimmed : null;
+};
+
+const isValidCampaignCode = (code) => {
+  if (!code) {
+    return false;
+  }
+
+  return /^[a-z0-9]+$/i.test(code) && String(code).length <= MAX_CAMPAIGN_CODE_LENGTH;
 };
 
 const isDefaultAttendantCode = (code) => normalizeAttendantCode(code) === DEFAULT_ATTENDANT.code;
@@ -439,12 +457,15 @@ const buildSaleResponse = (row) => {
   }
 
   const statusCssClass = resolveStatusClass(row.status_text, row.status_code);
+  const normalizedCampaignCode = row.campaign_code || DEFAULT_CAMPAIGN_CODE;
+  const resolvedCampaignName = row.campaign_name || normalizedCampaignCode;
 
   return {
     ...row,
     attendant_code: row.attendant_code || DEFAULT_ATTENDANT.code,
     attendant_name: row.attendant_name || DEFAULT_ATTENDANT.name,
-    campaign_code: row.campaign_code || DEFAULT_CAMPAIGN_CODE,
+    campaign_code: normalizedCampaignCode,
+    campaign_name: resolvedCampaignName,
     valor_formatado: formatCurrency(row.total_value_cents),
     status_css_class: statusCssClass,
     data_formatada: formatDate(row.created_at)
@@ -473,8 +494,10 @@ module.exports = {
   DEFAULT_ATTENDANT,
   attendantsRegistry,
   normalizeAttendantCode,
+  normalizeCampaignCode,
   isDefaultAttendantCode,
   isValidAttendantCode,
+  isValidCampaignCode,
   parseMonthlyCost,
   DEFAULT_SETTINGS,
   MANUAL_STATUS_MAP,

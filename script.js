@@ -1,6 +1,7 @@
 const API_BASE_URL = 'http://localhost:3001/api';
 
 let listaAtendentes = [];
+let listaCampanhas = [];
 let funilChartInstance = null;
 let composicaoChartInstance = null;
 let summaryFilterButtons = [];
@@ -29,6 +30,8 @@ let manualStatusButtons = [];
 let modalCurrentTransactionIdInput = null;
 let attendantsTableBodyEl = null;
 let attendantsTableData = [];
+let campaignsTableBodyEl = null;
+let campaignsTableData = [];
 
 let loginPage = null;
 let loginForm = null;
@@ -94,6 +97,7 @@ function cacheDomElements() {
     manualStatusButtons = Array.from(document.querySelectorAll('.manual-status-btn'));
     modalCurrentTransactionIdInput = document.getElementById('modal-current-transaction-id');
     attendantsTableBodyEl = document.getElementById('attendants-table-body');
+    campaignsTableBodyEl = document.getElementById('campaigns-table-body');
 
     bindManualStatusButtons();
 
@@ -283,6 +287,48 @@ function showToast(message, type = 'info') {
     }, 4000);
 }
 
+function generateRandomCode(length = 5) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+
+    for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    return result;
+}
+
+function handleGenerateCampaignCode() {
+    const campaignCodeInput = document.getElementById('add-campaign-code');
+    if (!campaignCodeInput) {
+        return;
+    }
+
+    campaignCodeInput.value = generateRandomCode(5);
+    campaignCodeInput.dispatchEvent(new Event('input'));
+}
+
+function isValidCampaignCode(code) {
+    if (!code) {
+        return false;
+    }
+
+    return /^[a-z0-9]{1,10}$/i.test(String(code).trim());
+}
+
+function getCampaignNameByCode(code) {
+    if (!code) {
+        return '';
+    }
+
+    const normalized = String(code).trim().toLowerCase();
+    const campaign = Array.isArray(listaCampanhas)
+        ? listaCampanhas.find((item) => String(item.code).trim().toLowerCase() === normalized)
+        : null;
+
+    return campaign?.name || '';
+}
+
 function handleUnauthorized() {
     if (getStoredToken()) {
         showToast('Sua sessão expirou. Faça login novamente.', 'error');
@@ -353,10 +399,12 @@ async function fetchJson(url, options = {}) {
 
 async function initData() {
     await loadAttendants();
+    await loadCampaigns();
     await Promise.all([
         loadSettingsData(),
         loadPostbackUrl(),
-        loadAttendantsTable()
+        loadAttendantsTable(),
+        loadCampaignsTable()
     ]);
     await updateSummaryData();
     await loadSalesData();
@@ -500,8 +548,11 @@ function setupEventListeners() {
     const salesStatusSelect = document.getElementById('salesStatusSelect') || document.getElementById('status-select');
     const salesAttendantSelect = document.getElementById('sales-attendant-select') || document.getElementById('attendant-select');
     const addAttendantBtn = document.getElementById('add-attendant-btn');
+    const addCampaignBtn = document.getElementById('add-campaign-btn');
+    const generateCampaignCodeBtn = document.getElementById('generate-campaign-code-btn');
     const saveSettingsButton = document.getElementById('saveSettingsButton') || document.querySelector('.save-btn');
     const attendantsTableBody = attendantsTableBodyEl;
+    const campaignsTableBody = campaignsTableBodyEl;
 
     if (summaryAttendantSelect) {
         summaryAttendantSelect.addEventListener('change', updateSummaryData);
@@ -527,12 +578,24 @@ function setupEventListeners() {
         addAttendantBtn.addEventListener('click', addAttendantToTable);
     }
 
+    if (addCampaignBtn) {
+        addCampaignBtn.addEventListener('click', addCampaign);
+    }
+
+    if (generateCampaignCodeBtn) {
+        generateCampaignCodeBtn.addEventListener('click', handleGenerateCampaignCode);
+    }
+
     if (saveSettingsButton) {
         saveSettingsButton.addEventListener('click', saveSettings);
     }
 
     if (attendantsTableBody) {
         attendantsTableBody.addEventListener('click', handleAttendantTableClick);
+    }
+
+    if (campaignsTableBody) {
+        campaignsTableBody.addEventListener('click', handleCampaignTableClick);
     }
 }
 
@@ -639,6 +702,26 @@ async function loadAttendants() {
         showToast('Não foi possível carregar a lista de atendentes.', 'error');
         listaAtendentes = [{ code: 'nao_definido', name: 'Não Definido', monthlyCost: 0 }];
         populateAttendantDropdowns();
+    }
+}
+
+async function loadCampaigns() {
+    try {
+        const campaigns = await fetchJson('/campaigns');
+        if (Array.isArray(campaigns)) {
+            listaCampanhas = campaigns
+                .filter((campaign) => campaign && campaign.code && campaign.name)
+                .map((campaign) => ({
+                    code: String(campaign.code),
+                    name: String(campaign.name)
+                }));
+        } else {
+            listaCampanhas = [];
+        }
+    } catch (error) {
+        console.error('Erro ao carregar campanhas:', error);
+        showToast('Não foi possível carregar a lista de campanhas.', 'error');
+        listaCampanhas = [];
     }
 }
 
@@ -819,6 +902,67 @@ async function loadAttendantsTable() {
     }
 }
 
+async function loadCampaignsTable() {
+    if (!campaignsTableBodyEl) {
+        return;
+    }
+
+    if (!Array.isArray(listaCampanhas) || listaCampanhas.length === 0) {
+        await loadCampaigns();
+    }
+
+    campaignsTableBodyEl.innerHTML = '';
+
+    const campaigns = Array.isArray(listaCampanhas)
+        ? listaCampanhas.map((campaign) => ({
+              code: String(campaign.code),
+              name: String(campaign.name)
+          }))
+        : [];
+
+    campaignsTableData = campaigns;
+
+    if (campaigns.length === 0) {
+        return;
+    }
+
+    campaigns.forEach((campaign) => {
+        const row = document.createElement('tr');
+
+        const nameCell = document.createElement('td');
+        nameCell.textContent = campaign.name;
+
+        const codeCell = document.createElement('td');
+        codeCell.textContent = campaign.code;
+
+        const actionsCell = document.createElement('td');
+        actionsCell.classList.add('attendant-actions-cell');
+
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'table-icon-button edit-campaign-btn';
+        editButton.dataset.code = campaign.code;
+        editButton.title = 'Editar campanha';
+        editButton.innerHTML = '<i class="fas fa-edit"></i>';
+
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'table-icon-button delete-campaign-btn';
+        deleteButton.dataset.code = campaign.code;
+        deleteButton.title = 'Excluir campanha';
+        deleteButton.innerHTML = '<i class="fas fa-trash-alt"></i>';
+
+        actionsCell.appendChild(editButton);
+        actionsCell.appendChild(deleteButton);
+
+        row.appendChild(nameCell);
+        row.appendChild(codeCell);
+        row.appendChild(actionsCell);
+
+        campaignsTableBodyEl.appendChild(row);
+    });
+}
+
 async function updateSummaryData() {
     const attendant = summaryAttendantSelect ? summaryAttendantSelect.value : undefined;
 
@@ -955,6 +1099,9 @@ async function loadSalesData(filters = {}) {
             const atendenteCodigo = sale.atendente || sale.attendant_code || '';
             const atendenteNome = sale.atendente_nome || sale.attendant_name || '';
             const campanhaCodigo = sale.campaign_code || sale.campanha || '';
+            const campanhaNome =
+                sale.campaign_name || sale.campaignName || getCampaignNameByCode(campanhaCodigo);
+            const campanhaDisplay = campanhaNome || campanhaCodigo || 'N/D';
 
             row.dataset.id = transactionId;
             row.dataset.cliente = cliente;
@@ -972,7 +1119,8 @@ async function loadSalesData(filters = {}) {
             row.dataset.atendente = atendenteCodigo || 'nao_definido';
             row.dataset.atendenteNome = atendenteNome;
             row.dataset.campanha = campanhaCodigo || 'nao_definida';
-            row.dataset.campanhaDisplay = campanhaCodigo || 'N/D';
+            row.dataset.campanhaNome = campanhaNome || '';
+            row.dataset.campanhaDisplay = campanhaDisplay;
 
             const clienteTd = document.createElement('td');
             clienteTd.textContent = cliente;
@@ -984,7 +1132,7 @@ async function loadSalesData(filters = {}) {
             atendenteTd.textContent = atendenteNome || obterNomeAtendente(atendenteCodigo) || 'Não Definido';
 
             const campanhaTd = document.createElement('td');
-            campanhaTd.textContent = campanhaCodigo || 'N/D';
+            campanhaTd.textContent = campanhaDisplay;
 
             const dataTd = document.createElement('td');
             dataTd.textContent = dataAgendada;
@@ -1230,6 +1378,50 @@ async function addAttendantToTable(event) {
     }
 }
 
+async function addCampaign(event) {
+    event.preventDefault();
+
+    const campaignNameInput = document.getElementById('add-campaign-name');
+    const campaignCodeInput = document.getElementById('add-campaign-code');
+
+    if (!campaignNameInput || !campaignCodeInput) {
+        return;
+    }
+
+    const name = campaignNameInput.value.trim();
+    const code = campaignCodeInput.value.trim();
+
+    if (!name || !code) {
+        showToast('Por favor, preencha o Nome e o Código da campanha.', 'error');
+        return;
+    }
+
+    if (!isValidCampaignCode(code)) {
+        showToast('O Código deve ter entre 1 e 10 caracteres alfanuméricos.', 'error');
+        return;
+    }
+
+    try {
+        await fetchJson('/campaigns', {
+            method: 'POST',
+            body: { name, code }
+        });
+
+        campaignNameInput.value = '';
+        campaignCodeInput.value = '';
+
+        await loadCampaigns();
+        await loadCampaignsTable();
+        const currentFilters = getCurrentSalesFilters();
+        await loadSalesData(currentFilters);
+
+        showToast('Campanha adicionada com sucesso!', 'success');
+    } catch (error) {
+        console.error('Erro ao adicionar campanha:', error);
+        showToast(error.message || 'Não foi possível adicionar a campanha.', 'error');
+    }
+}
+
 async function saveSettings(event) {
     event.preventDefault();
 
@@ -1362,6 +1554,104 @@ async function handleDeleteAttendant(attendantCode) {
     } catch (error) {
         console.error('Erro ao remover atendente:', error);
         showToast('Não foi possível remover o atendente.', 'error');
+    }
+}
+
+async function handleCampaignTableClick(event) {
+    const targetButton = event.target.closest('.edit-campaign-btn, .delete-campaign-btn');
+    if (!targetButton) {
+        return;
+    }
+
+    event.preventDefault();
+
+    const campaignCode = targetButton.dataset.code;
+    if (!campaignCode) {
+        return;
+    }
+
+    if (targetButton.classList.contains('edit-campaign-btn')) {
+        await handleEditCampaign(campaignCode);
+        return;
+    }
+
+    if (targetButton.classList.contains('delete-campaign-btn')) {
+        await handleDeleteCampaign(campaignCode);
+    }
+}
+
+async function handleEditCampaign(campaignCode) {
+    const campaign =
+        campaignsTableData.find((item) => item.code === campaignCode) ||
+        (Array.isArray(listaCampanhas)
+            ? listaCampanhas.find((item) => item.code === campaignCode)
+            : null);
+
+    if (!campaign) {
+        showToast('Não foi possível localizar a campanha selecionada.', 'error');
+        return;
+    }
+
+    const newNameInput = prompt('Nome da campanha:', campaign.name);
+    if (newNameInput === null) {
+        return;
+    }
+    const trimmedName = newNameInput.trim();
+    if (!trimmedName) {
+        showToast('O nome da campanha não pode ficar vazio.', 'error');
+        return;
+    }
+
+    const newCodeInput = prompt('Código da campanha (1 a 10 caracteres):', campaign.code);
+    if (newCodeInput === null) {
+        return;
+    }
+    const preparedCode = newCodeInput.trim();
+    if (!isValidCampaignCode(preparedCode)) {
+        showToast('O código deve conter entre 1 e 10 caracteres alfanuméricos.', 'error');
+        return;
+    }
+
+    try {
+        await fetchJson(`/campaigns/${encodeURIComponent(campaignCode)}`, {
+            method: 'PUT',
+            body: {
+                name: trimmedName,
+                newCode: preparedCode
+            }
+        });
+
+        await loadCampaigns();
+        await loadCampaignsTable();
+        const currentFilters = getCurrentSalesFilters();
+        await loadSalesData(currentFilters);
+
+        showToast('Campanha atualizada com sucesso!', 'success');
+    } catch (error) {
+        console.error('Erro ao atualizar campanha:', error);
+        showToast(error.message || 'Não foi possível atualizar a campanha.', 'error');
+    }
+}
+
+async function handleDeleteCampaign(campaignCode) {
+    if (!confirm('Tem certeza de que deseja excluir esta campanha?')) {
+        return;
+    }
+
+    try {
+        await fetchJson(`/campaigns/${encodeURIComponent(campaignCode)}`, {
+            method: 'DELETE'
+        });
+
+        await loadCampaigns();
+        await loadCampaignsTable();
+        const currentFilters = getCurrentSalesFilters();
+        await loadSalesData(currentFilters);
+
+        showToast('Campanha removida com sucesso!', 'success');
+    } catch (error) {
+        console.error('Erro ao remover campanha:', error);
+        showToast(error.message || 'Não foi possível remover a campanha.', 'error');
     }
 }
 

@@ -233,8 +233,13 @@ test('POST /api/postback stores campaign name when mapping exists', { concurrenc
 
   const createCampaignResponse = await auth
     .post('/api/campaigns')
-    .send({ code: 'fbads', name: 'Criativo 1 - Video Gato' });
+    .send({ code: 'fbads', name: 'Criativo 1 - Video Gato', cost: 150.25 });
   assert.equal(createCampaignResponse.statusCode, 201);
+  assert.deepEqual(createCampaignResponse.body, {
+    code: 'fbads',
+    name: 'Criativo 1 - Video Gato',
+    cost: 150.25
+  });
 
   const payload = {
     transaction_id: 'campaign-mapped',
@@ -445,23 +450,27 @@ test('Campaign management endpoints allow CRUD operations', { concurrency: 1 }, 
 
   const createResponse = await auth
     .post('/api/campaigns')
-    .send({ code: 'fbads', name: 'Campanha Facebook' });
+    .send({ code: 'fbads', name: 'Campanha Facebook', cost: 120.5 });
   assert.equal(createResponse.statusCode, 201);
-  assert.deepEqual(createResponse.body, { code: 'fbads', name: 'Campanha Facebook' });
+  assert.deepEqual(createResponse.body, { code: 'fbads', name: 'Campanha Facebook', cost: 120.5 });
 
   const listResponse = await auth.get('/api/campaigns');
   assert.equal(listResponse.statusCode, 200);
-  assert.deepEqual(listResponse.body, [{ code: 'fbads', name: 'Campanha Facebook' }]);
+  assert.deepEqual(listResponse.body, [{ code: 'fbads', name: 'Campanha Facebook', cost: 120.5 }]);
 
   const updateResponse = await auth
     .put('/api/campaigns/fbads')
-    .send({ name: 'Campanha Facebook Atualizada', newCode: 'fbnew' });
+    .send({ name: 'Campanha Facebook Atualizada', newCode: 'fbnew', cost: 300.75 });
   assert.equal(updateResponse.statusCode, 200);
-  assert.deepEqual(updateResponse.body, { code: 'fbnew', name: 'Campanha Facebook Atualizada' });
+  assert.deepEqual(updateResponse.body, {
+    code: 'fbnew',
+    name: 'Campanha Facebook Atualizada',
+    cost: 300.75
+  });
 
   const listAfterUpdate = await auth.get('/api/campaigns');
   assert.equal(listAfterUpdate.statusCode, 200);
-  assert.deepEqual(listAfterUpdate.body, [{ code: 'fbnew', name: 'Campanha Facebook Atualizada' }]);
+  assert.deepEqual(listAfterUpdate.body, [{ code: 'fbnew', name: 'Campanha Facebook Atualizada', cost: 300.75 }]);
 
   const deleteResponse = await auth.delete('/api/campaigns/fbnew');
   assert.equal(deleteResponse.statusCode, 204);
@@ -469,6 +478,78 @@ test('Campaign management endpoints allow CRUD operations', { concurrency: 1 }, 
   const listAfterDelete = await auth.get('/api/campaigns');
   assert.equal(listAfterDelete.statusCode, 200);
   assert.deepEqual(listAfterDelete.body, []);
+
+  await closeDatabase(db);
+});
+
+test('GET /api/reports/campaigns calculates revenue, lucro and ROI', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
+
+  const campaignResponses = await Promise.all([
+    auth.post('/api/campaigns').send({ code: 'fbads', name: 'Facebook Ads', cost: 200 }),
+    auth.post('/api/campaigns').send({ code: 'ytads', name: 'YouTube Ads', cost: 50 })
+  ]);
+  campaignResponses.forEach((response) => {
+    assert.equal(response.statusCode, 201);
+  });
+
+  const salePayloads = [
+    {
+      transaction_id: 'roi-paid-1',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'agente.fbads.cliente@example.com',
+      product_name: 'Produto FB',
+      total_value_cents: 50000,
+      created_at: dateInThisMonth(5),
+      updated_at: dateInThisMonth(5)
+    },
+    {
+      transaction_id: 'roi-paid-2',
+      status_code: 3,
+      status_text: 'Pagamento Aprovado',
+      client_email: 'agente.fbads.cliente2@example.com',
+      product_name: 'Produto FB 2',
+      total_value_cents: 25000,
+      created_at: dateInThisMonth(6),
+      updated_at: dateInThisMonth(6)
+    },
+    {
+      transaction_id: 'roi-paid-3',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'agente.ytads.cliente@example.com',
+      product_name: 'Produto YT',
+      total_value_cents: 30000,
+      created_at: dateInThisMonth(7),
+      updated_at: dateInThisMonth(7)
+    },
+    {
+      transaction_id: 'roi-pending',
+      status_code: 2,
+      status_text: 'Agendado',
+      client_email: 'agente.fbads.cliente3@example.com',
+      product_name: 'Produto FB Agendado',
+      total_value_cents: 40000,
+      created_at: dateInThisMonth(8),
+      updated_at: dateInThisMonth(8)
+    }
+  ];
+
+  for (const payload of salePayloads) {
+    const response = await request(app).post('/api/postback').send(payload);
+    assert.equal(response.statusCode, 201);
+  }
+
+  const reportResponse = await auth.get('/api/reports/campaigns').query({ period: 'this_month' });
+  assert.equal(reportResponse.statusCode, 200);
+
+  assert.deepEqual(reportResponse.body, [
+    { code: 'fbads', name: 'Facebook Ads', cost: 200, revenue: 750, profit: 550, roi: 275 },
+    { code: 'ytads', name: 'YouTube Ads', cost: 50, revenue: 300, profit: 250, roi: 500 }
+  ]);
 
   await closeDatabase(db);
 });

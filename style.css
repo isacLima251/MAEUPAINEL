@@ -368,6 +368,14 @@ table tbody tr td {
     vertical-align: middle;
 }
 
+.value-positive {
+    color: #00d285;
+}
+
+.value-negative {
+    color: #ff5b5b;
+}
+
 .attendant-actions-cell {
     display: flex;
     gap: 8px;

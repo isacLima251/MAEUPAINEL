@@ -8,6 +8,7 @@ const createSettingsRoutes = require('./routes/settings');
 const createSummaryRoutes = require('./routes/summary');
 const createPostbackRoutes = require('./routes/postback');
 const createAuthRoutes = require('./routes/auth');
+const createReportRoutes = require('./routes/reports');
 const { authenticateToken } = require('./middlewares/authMiddleware');
 
 const createApp = (options = {}) => {
@@ -26,6 +27,7 @@ const createApp = (options = {}) => {
   app.use('/api', createCampaignRoutes(db));
   app.use('/api', createSettingsRoutes(db));
   app.use('/api', createSummaryRoutes(db));
+  app.use('/api', createReportRoutes(db));
 
   return { app, db };
 };

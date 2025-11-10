@@ -32,6 +32,11 @@ let attendantsTableBodyEl = null;
 let attendantsTableData = [];
 let campaignsTableBodyEl = null;
 let campaignsTableData = [];
+let campaignReportFilterButtons = [];
+let campaignReportStartInput = null;
+let campaignReportEndInput = null;
+let campaignReportApplyButton = null;
+let campaignReportTableBody = null;
 
 let loginPage = null;
 let loginForm = null;
@@ -42,8 +47,10 @@ let toastContainer = null;
 let activeRequests = 0;
 
 let currentSummaryPeriod = 'today';
+let currentCampaignReportPeriod = 'today';
 
 const SUMMARY_CUSTOM_PERIOD_KEY = 'custom';
+const CAMPAIGN_CUSTOM_PERIOD_KEY = SUMMARY_CUSTOM_PERIOD_KEY;
 
 const periodButtonMap = {
     'hoje': 'today',
@@ -55,7 +62,8 @@ const periodButtonMap = {
 document.addEventListener('DOMContentLoaded', () => {
     cacheDomElements();
     setupNavigation();
-    setupFilterButtons();
+    setupSummaryFilterButtons();
+    setupCampaignReportFilters();
     setupCopyButton();
     setupModal();
     setupEventListeners();
@@ -98,6 +106,11 @@ function cacheDomElements() {
     modalCurrentTransactionIdInput = document.getElementById('modal-current-transaction-id');
     attendantsTableBodyEl = document.getElementById('attendants-table-body');
     campaignsTableBodyEl = document.getElementById('campaigns-table-body');
+    campaignReportFilterButtons = Array.from(document.querySelectorAll('#page-campanhas .filter-btn'));
+    campaignReportStartInput = document.getElementById('campaign-date-start');
+    campaignReportEndInput = document.getElementById('campaign-date-end');
+    campaignReportApplyButton = document.querySelector('#page-campanhas .filter-apply-btn');
+    campaignReportTableBody = document.getElementById('ranking-campanhas-tbody');
 
     bindManualStatusButtons();
 
@@ -107,6 +120,14 @@ function cacheDomElements() {
     } else {
         currentSummaryPeriod = 'today';
         setActiveSummaryButtonByPeriod('today');
+    }
+
+    const campaignActiveButton = campaignReportFilterButtons.find((button) => button.classList.contains('active'));
+    if (campaignActiveButton && campaignActiveButton.dataset.period) {
+        currentCampaignReportPeriod = campaignActiveButton.dataset.period;
+    } else {
+        currentCampaignReportPeriod = 'today';
+        setActiveCampaignReportButtonByPeriod('today');
     }
 }
 
@@ -139,6 +160,43 @@ function clearCustomDateInputs() {
     if (summaryCustomEndInput) {
         summaryCustomEndInput.value = '';
     }
+}
+
+function setActiveCampaignReportButtonByPeriod(period) {
+    if (!campaignReportFilterButtons || campaignReportFilterButtons.length === 0) {
+        return;
+    }
+
+    const targetPeriod = (period || '').toLowerCase();
+
+    let targetButton = null;
+    if (targetPeriod) {
+        targetButton = campaignReportFilterButtons.find((button) => {
+            const buttonPeriod = (button.dataset.period || '').toLowerCase();
+            return buttonPeriod === targetPeriod;
+        });
+    }
+
+    campaignReportFilterButtons.forEach((button) => button.classList.remove('active'));
+
+    if (targetButton) {
+        targetButton.classList.add('active');
+    }
+}
+
+function clearCampaignReportCustomDateInputs() {
+    if (campaignReportStartInput) {
+        campaignReportStartInput.value = '';
+    }
+    if (campaignReportEndInput) {
+        campaignReportEndInput.value = '';
+    }
+}
+
+function resetCampaignReportFiltersToDefault() {
+    currentCampaignReportPeriod = 'today';
+    setActiveCampaignReportButtonByPeriod('today');
+    clearCampaignReportCustomDateInputs();
 }
 
 function resetSummaryFiltersToDefault() {
@@ -408,6 +466,7 @@ async function initData() {
     ]);
     await updateSummaryData();
     await loadSalesData();
+    await updateCampaignReportData();
 }
 
 function setupNavigation() {
@@ -461,10 +520,16 @@ function handleMenuClick({ menuItems, pages, mainTitle, targetMenuItem, targetPa
     if (targetPageId === 'page-resumo') {
         resetSummaryFiltersToDefault();
         updateSummaryData();
+    } else if (targetPageId === 'page-campanhas') {
+        if (!campaignReportTableBody) {
+            campaignReportTableBody = document.getElementById('ranking-campanhas-tbody');
+        }
+        resetCampaignReportFiltersToDefault();
+        updateCampaignReportData();
     }
 }
 
-function setupFilterButtons() {
+function setupSummaryFilterButtons() {
     summaryFilterButtons.forEach((button) => {
         const label = button.textContent.trim().toLowerCase();
         if (!button.dataset.period && periodButtonMap[label]) {
@@ -487,6 +552,33 @@ function setupFilterButtons() {
             summaryFilterButtons.forEach((btn) => btn.classList.remove('active'));
             currentSummaryPeriod = SUMMARY_CUSTOM_PERIOD_KEY;
             updateSummaryData();
+        });
+    }
+}
+
+function setupCampaignReportFilters() {
+    campaignReportFilterButtons.forEach((button) => {
+        const label = button.textContent.trim().toLowerCase();
+        if (!button.dataset.period && periodButtonMap[label]) {
+            button.dataset.period = periodButtonMap[label];
+        }
+
+        button.addEventListener('click', () => {
+            campaignReportFilterButtons.forEach((btn) => btn.classList.remove('active'));
+            button.classList.add('active');
+            currentCampaignReportPeriod = button.dataset.period || 'today';
+            if (currentCampaignReportPeriod !== CAMPAIGN_CUSTOM_PERIOD_KEY) {
+                clearCampaignReportCustomDateInputs();
+            }
+            updateCampaignReportData();
+        });
+    });
+
+    if (campaignReportApplyButton) {
+        campaignReportApplyButton.addEventListener('click', () => {
+            campaignReportFilterButtons.forEach((btn) => btn.classList.remove('active'));
+            currentCampaignReportPeriod = CAMPAIGN_CUSTOM_PERIOD_KEY;
+            updateCampaignReportData();
         });
     }
 }
@@ -713,7 +805,8 @@ async function loadCampaigns() {
                 .filter((campaign) => campaign && campaign.code && campaign.name)
                 .map((campaign) => ({
                     code: String(campaign.code),
-                    name: String(campaign.name)
+                    name: String(campaign.name),
+                    cost: Number(campaign.cost ?? 0) || 0
                 }));
         } else {
             listaCampanhas = [];
@@ -916,7 +1009,8 @@ async function loadCampaignsTable() {
     const campaigns = Array.isArray(listaCampanhas)
         ? listaCampanhas.map((campaign) => ({
               code: String(campaign.code),
-              name: String(campaign.name)
+              name: String(campaign.name),
+              cost: Number(campaign.cost ?? 0) || 0
           }))
         : [];
 
@@ -934,6 +1028,9 @@ async function loadCampaignsTable() {
 
         const codeCell = document.createElement('td');
         codeCell.textContent = campaign.code;
+
+        const costCell = document.createElement('td');
+        costCell.textContent = formatCurrency(campaign.cost);
 
         const actionsCell = document.createElement('td');
         actionsCell.classList.add('attendant-actions-cell');
@@ -957,6 +1054,7 @@ async function loadCampaignsTable() {
 
         row.appendChild(nameCell);
         row.appendChild(codeCell);
+        row.appendChild(costCell);
         row.appendChild(actionsCell);
 
         campaignsTableBodyEl.appendChild(row);
@@ -998,6 +1096,107 @@ async function updateSummaryData() {
         console.error('Erro ao carregar dados de resumo:', error);
         showToast('Não foi possível carregar os dados do resumo.', 'error');
     }
+}
+
+async function updateCampaignReportData() {
+    if (!campaignReportTableBody) {
+        return;
+    }
+
+    const params = new URLSearchParams();
+
+    if (currentCampaignReportPeriod === CAMPAIGN_CUSTOM_PERIOD_KEY) {
+        const startDate = campaignReportStartInput ? campaignReportStartInput.value : '';
+        const endDate = campaignReportEndInput ? campaignReportEndInput.value : '';
+
+        if (!startDate || !endDate) {
+            showToast('Selecione uma data inicial e final para aplicar o filtro personalizado.', 'error');
+            return;
+        }
+
+        if (startDate > endDate) {
+            showToast('A data inicial não pode ser maior que a data final.', 'error');
+            return;
+        }
+
+        params.append('startDate', startDate);
+        params.append('endDate', endDate);
+    } else if (currentCampaignReportPeriod) {
+        params.append('period', currentCampaignReportPeriod);
+    }
+
+    const query = params.toString();
+
+    try {
+        const report = await fetchJson(`/reports/campaigns${query ? `?${query}` : ''}`);
+        renderCampaignReportTable(Array.isArray(report) ? report : []);
+    } catch (error) {
+        console.error('Erro ao carregar relatório de campanhas:', error);
+        showToast('Não foi possível carregar o relatório de campanhas.', 'error');
+        renderCampaignReportTable([]);
+    }
+}
+
+function renderCampaignReportTable(report = []) {
+    if (!campaignReportTableBody) {
+        return;
+    }
+
+    campaignReportTableBody.innerHTML = '';
+
+    if (!Array.isArray(report) || report.length === 0) {
+        const emptyRow = document.createElement('tr');
+        const emptyCell = document.createElement('td');
+        emptyCell.colSpan = 5;
+        emptyCell.textContent = 'Nenhum resultado encontrado para o período selecionado.';
+        emptyCell.style.textAlign = 'center';
+        emptyRow.appendChild(emptyCell);
+        campaignReportTableBody.appendChild(emptyRow);
+        return;
+    }
+
+    report.forEach((item) => {
+        const row = document.createElement('tr');
+
+        const nameCell = document.createElement('td');
+        nameCell.textContent = item?.name || item?.code || 'Campanha Não Definida';
+
+        const costValue = Number(item?.cost) || 0;
+        const costCell = document.createElement('td');
+        costCell.textContent = formatCurrency(costValue);
+
+        const revenueValue = Number(item?.revenue) || 0;
+        const revenueCell = document.createElement('td');
+        revenueCell.textContent = formatCurrency(revenueValue);
+
+        const profitValue = Number(item?.profit) || 0;
+        const profitCell = document.createElement('td');
+        profitCell.textContent = formatCurrency(profitValue);
+        profitCell.classList.remove('value-positive', 'value-negative');
+        if (profitValue > 0) {
+            profitCell.classList.add('value-positive');
+        } else if (profitValue < 0) {
+            profitCell.classList.add('value-negative');
+        }
+
+        const roiValue = Number(item?.roi) || 0;
+        const roiCell = document.createElement('td');
+        roiCell.textContent = formatPercentage(roiValue);
+        roiCell.classList.remove('value-positive', 'value-negative');
+        if (roiValue > 0) {
+            roiCell.classList.add('value-positive');
+        } else if (roiValue < 0) {
+            roiCell.classList.add('value-negative');
+        }
+
+        row.appendChild(nameCell);
+        row.appendChild(costCell);
+        row.appendChild(revenueCell);
+        row.appendChild(profitCell);
+        row.appendChild(roiCell);
+
+        campaignReportTableBody.appendChild(row);
+    });
 }
 
 function applySummaryToCards(summary) {
@@ -1383,6 +1582,7 @@ async function addCampaign(event) {
 
     const campaignNameInput = document.getElementById('add-campaign-name');
     const campaignCodeInput = document.getElementById('add-campaign-code');
+    const campaignCostInput = document.getElementById('add-campaign-cost');
 
     if (!campaignNameInput || !campaignCodeInput) {
         return;
@@ -1390,6 +1590,8 @@ async function addCampaign(event) {
 
     const name = campaignNameInput.value.trim();
     const code = campaignCodeInput.value.trim();
+    const costValue = campaignCostInput ? Number(campaignCostInput.value || 0) : 0;
+    const normalizedCost = Number.isFinite(costValue) ? costValue : 0;
 
     if (!name || !code) {
         showToast('Por favor, preencha o Nome e o Código da campanha.', 'error');
@@ -1404,16 +1606,20 @@ async function addCampaign(event) {
     try {
         await fetchJson('/campaigns', {
             method: 'POST',
-            body: { name, code }
+            body: { name, code, cost: normalizedCost }
         });
 
         campaignNameInput.value = '';
         campaignCodeInput.value = '';
+        if (campaignCostInput) {
+            campaignCostInput.value = '0';
+        }
 
         await loadCampaigns();
         await loadCampaignsTable();
         const currentFilters = getCurrentSalesFilters();
         await loadSalesData(currentFilters);
+        await updateCampaignReportData();
 
         showToast('Campanha adicionada com sucesso!', 'success');
     } catch (error) {
@@ -1612,12 +1818,25 @@ async function handleEditCampaign(campaignCode) {
         return;
     }
 
+    const costPromptValue = prompt('Investimento da campanha (R$):', String(campaign.cost ?? 0));
+    if (costPromptValue === null) {
+        return;
+    }
+
+    const parsedCost = toNumericValue(costPromptValue);
+    const normalizedCost = Number.isFinite(parsedCost) ? parsedCost : 0;
+    if (normalizedCost < 0) {
+        showToast('O investimento da campanha não pode ser negativo.', 'error');
+        return;
+    }
+
     try {
         await fetchJson(`/campaigns/${encodeURIComponent(campaignCode)}`, {
             method: 'PUT',
             body: {
                 name: trimmedName,
-                newCode: preparedCode
+                newCode: preparedCode,
+                cost: normalizedCost
             }
         });
 
@@ -1625,6 +1844,7 @@ async function handleEditCampaign(campaignCode) {
         await loadCampaignsTable();
         const currentFilters = getCurrentSalesFilters();
         await loadSalesData(currentFilters);
+        await updateCampaignReportData();
 
         showToast('Campanha atualizada com sucesso!', 'success');
     } catch (error) {
@@ -1647,6 +1867,7 @@ async function handleDeleteCampaign(campaignCode) {
         await loadCampaignsTable();
         const currentFilters = getCurrentSalesFilters();
         await loadSalesData(currentFilters);
+        await updateCampaignReportData();
 
         showToast('Campanha removida com sucesso!', 'success');
     } catch (error) {

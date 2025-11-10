@@ -447,21 +447,21 @@ test('Campaign management endpoints allow CRUD operations', { concurrency: 1 }, 
     .post('/api/campaigns')
     .send({ code: 'fbads', name: 'Campanha Facebook' });
   assert.equal(createResponse.statusCode, 201);
-  assert.deepEqual(createResponse.body, { code: 'fbads', name: 'Campanha Facebook' });
+  assert.deepEqual(createResponse.body, { code: 'fbads', name: 'Campanha Facebook', cost: 0 });
 
   const listResponse = await auth.get('/api/campaigns');
   assert.equal(listResponse.statusCode, 200);
-  assert.deepEqual(listResponse.body, [{ code: 'fbads', name: 'Campanha Facebook' }]);
+  assert.deepEqual(listResponse.body, [{ code: 'fbads', name: 'Campanha Facebook', cost: 0 }]);
 
   const updateResponse = await auth
     .put('/api/campaigns/fbads')
     .send({ name: 'Campanha Facebook Atualizada', newCode: 'fbnew' });
   assert.equal(updateResponse.statusCode, 200);
-  assert.deepEqual(updateResponse.body, { code: 'fbnew', name: 'Campanha Facebook Atualizada' });
+  assert.deepEqual(updateResponse.body, { code: 'fbnew', name: 'Campanha Facebook Atualizada', cost: 0 });
 
   const listAfterUpdate = await auth.get('/api/campaigns');
   assert.equal(listAfterUpdate.statusCode, 200);
-  assert.deepEqual(listAfterUpdate.body, [{ code: 'fbnew', name: 'Campanha Facebook Atualizada' }]);
+  assert.deepEqual(listAfterUpdate.body, [{ code: 'fbnew', name: 'Campanha Facebook Atualizada', cost: 0 }]);
 
   const deleteResponse = await auth.delete('/api/campaigns/fbnew');
   assert.equal(deleteResponse.statusCode, 204);
@@ -469,6 +469,94 @@ test('Campaign management endpoints allow CRUD operations', { concurrency: 1 }, 
   const listAfterDelete = await auth.get('/api/campaigns');
   assert.equal(listAfterDelete.statusCode, 200);
   assert.deepEqual(listAfterDelete.body, []);
+
+  await closeDatabase(db);
+});
+
+test('GET /api/reports/campaigns aggregates revenue, profit and ROI', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
+
+  const createCampaignOne = await auth
+    .post('/api/campaigns')
+    .send({ code: 'ads1', name: 'Campanha ADS 1', cost: 100 });
+  assert.equal(createCampaignOne.statusCode, 201);
+
+  const createCampaignTwo = await auth
+    .post('/api/campaigns')
+    .send({ code: 'ads2', name: 'Campanha ADS 2', cost: 50 });
+  assert.equal(createCampaignTwo.statusCode, 201);
+
+  const salesPayloads = [
+    {
+      transaction_id: 'ads1-sale-1',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'cliente.ads1@example.com',
+      product_name: 'Produto A',
+      total_value_cents: 20000,
+      created_at: dateInThisMonth(5),
+      updated_at: dateInThisMonth(5)
+    },
+    {
+      transaction_id: 'ads1-sale-2',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'cliente2.ads1@example.com',
+      product_name: 'Produto B',
+      total_value_cents: 8000,
+      created_at: dateInThisMonth(6),
+      updated_at: dateInThisMonth(6)
+    },
+    {
+      transaction_id: 'ads1-sale-agendado',
+      status_code: 2,
+      status_text: 'Agendado',
+      client_email: 'cliente3.ads1@example.com',
+      product_name: 'Produto C',
+      total_value_cents: 5000,
+      created_at: dateInThisMonth(7),
+      updated_at: dateInThisMonth(7)
+    },
+    {
+      transaction_id: 'ads2-sale-1',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'cliente.ads2@example.com',
+      product_name: 'Produto D',
+      total_value_cents: 5000,
+      created_at: dateInThisMonth(8),
+      updated_at: dateInThisMonth(8)
+    }
+  ];
+
+  for (const payload of salesPayloads) {
+    const response = await request(app).post('/api/postback').send(payload);
+    assert.equal(response.statusCode, 201);
+  }
+
+  const reportResponse = await auth.get('/api/reports/campaigns?period=this_year');
+  assert.equal(reportResponse.statusCode, 200);
+
+  assert.deepEqual(reportResponse.body, [
+    {
+      campaign_code: 'ads1',
+      campaign_name: 'Campanha ADS 1',
+      receita: 280,
+      cost: 100,
+      lucro: 180,
+      roi: 180
+    },
+    {
+      campaign_code: 'ads2',
+      campaign_name: 'Campanha ADS 2',
+      receita: 50,
+      cost: 50,
+      lucro: 0,
+      roi: 0
+    }
+  ]);
 
   await closeDatabase(db);
 });

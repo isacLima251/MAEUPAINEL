@@ -3,8 +3,21 @@ const {
   isValidCampaignCode
 } = require('../utils/helpers');
 
+const parseCampaignCost = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return 0;
+  }
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return numeric;
+};
+
 const createCampaign = (db) => (req, res) => {
-  const { code, name } = req.body || {};
+  const { code, name, cost } = req.body || {};
 
   const normalizedCode = normalizeCampaignCode(code);
   if (!normalizedCode || !isValidCampaignCode(normalizedCode)) {
@@ -18,8 +31,13 @@ const createCampaign = (db) => (req, res) => {
     return res.status(400).json({ message: 'name is required.' });
   }
 
-  const insertQuery = `INSERT INTO campaigns (code, name) VALUES (?, ?)`;
-  db.run(insertQuery, [normalizedCode, trimmedName], (error) => {
+  const parsedCost = parseCampaignCost(cost);
+  if (parsedCost === null) {
+    return res.status(400).json({ message: 'cost must be a valid number.' });
+  }
+
+  const insertQuery = `INSERT INTO campaigns (code, name, cost) VALUES (?, ?, ?)`;
+  db.run(insertQuery, [normalizedCode, trimmedName, parsedCost], (error) => {
     if (error) {
       if (error.message && error.message.toLowerCase().includes('unique')) {
         return res.status(409).json({ message: 'Campaign code already exists.' });
@@ -31,14 +49,15 @@ const createCampaign = (db) => (req, res) => {
 
     return res.status(201).json({
       code: normalizedCode,
-      name: trimmedName
+      name: trimmedName,
+      cost: parsedCost
     });
   });
 };
 
 const listCampaigns = (db) => (req, res) => {
   const query = `
-    SELECT code, name
+    SELECT code, name, cost
     FROM campaigns
     ORDER BY name COLLATE NOCASE
   `;
@@ -60,7 +79,8 @@ const listCampaigns = (db) => (req, res) => {
 
         return {
           code: normalizedCode,
-          name: trimmedName
+          name: trimmedName,
+          cost: Number(row.cost) || 0
         };
       })
       .filter(Boolean);
@@ -71,7 +91,7 @@ const listCampaigns = (db) => (req, res) => {
 
 const updateCampaign = (db) => (req, res) => {
   const { code: routeCode } = req.params || {};
-  const { name, newCode } = req.body || {};
+  const { name, newCode, cost } = req.body || {};
 
   const targetCode = normalizeCampaignCode(routeCode);
   if (!targetCode || !isValidCampaignCode(targetCode)) {
@@ -92,8 +112,13 @@ const updateCampaign = (db) => (req, res) => {
       .json({ message: 'newCode must contain between 1 and 10 alphanumeric characters.' });
   }
 
+  const parsedCost = cost === undefined ? undefined : parseCampaignCost(cost);
+  if (parsedCost === null) {
+    return res.status(400).json({ message: 'cost must be a valid number.' });
+  }
+
   db.get(
-    `SELECT code FROM campaigns WHERE lower(code) = ?`,
+    `SELECT code, cost FROM campaigns WHERE lower(code) = ?`,
     [targetCode],
     (selectError, existingCampaign) => {
       if (selectError) {
@@ -105,15 +130,17 @@ const updateCampaign = (db) => (req, res) => {
         return res.status(404).json({ message: 'Campaign not found.' });
       }
 
+      const nextCost = parsedCost === undefined ? Number(existingCampaign.cost) || 0 : parsedCost;
+
       const updateQuery = `
         UPDATE campaigns
-        SET code = ?, name = ?
+        SET code = ?, name = ?, cost = ?
         WHERE code = ?
       `;
 
       db.run(
         updateQuery,
-        [normalizedNewCode, trimmedName, existingCampaign.code],
+        [normalizedNewCode, trimmedName, nextCost, existingCampaign.code],
         function (updateError) {
           if (updateError) {
             if (updateError.message && updateError.message.toLowerCase().includes('unique')) {
@@ -130,7 +157,8 @@ const updateCampaign = (db) => (req, res) => {
 
           return res.json({
             code: normalizedNewCode,
-            name: trimmedName
+            name: trimmedName,
+            cost: nextCost
           });
         }
       );

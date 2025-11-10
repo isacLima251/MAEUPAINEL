@@ -3,6 +3,20 @@ const assert = require('node:assert/strict');
 const request = require('supertest');
 const { createApp } = require('../src/server');
 
+const loginAndGetToken = async (app) => {
+  const response = await request(app).post('/api/login').send({ username: 'admin', password: 'admin' });
+  assert.equal(response.statusCode, 200);
+  assert.ok(response.body.token, 'Expected login response to include a token');
+  return response.body.token;
+};
+
+const createAuthClient = (app, token) => ({
+  get: (url) => request(app).get(url).set('Authorization', `Bearer ${token}`),
+  post: (url) => request(app).post(url).set('Authorization', `Bearer ${token}`),
+  put: (url) => request(app).put(url).set('Authorization', `Bearer ${token}`),
+  delete: (url) => request(app).delete(url).set('Authorization', `Bearer ${token}`)
+});
+
 const setupApp = () => {
   const { app, db } = createApp({ databasePath: ':memory:' });
   return { app, db };
@@ -66,7 +80,10 @@ const dateInLastMonth = (day = 10) => {
 test('GET /api/sales returns an empty list when there are no records', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
 
-  const response = await request(app).get('/api/sales');
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
+
+  const response = await auth.get('/api/sales');
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, []);
@@ -76,6 +93,8 @@ test('GET /api/sales returns an empty list when there are no records', { concurr
 
 test('POST /api/postback stores the sale and GET /api/sales returns it', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
   const payload = {
     transaction_id: 'abc123',
@@ -94,7 +113,7 @@ test('POST /api/postback stores the sale and GET /api/sales returns it', { concu
   const postResponse = await request(app).post('/api/postback').send(payload);
   assert.equal(postResponse.statusCode, 201);
 
-  const listResponse = await request(app).get('/api/sales');
+  const listResponse = await auth.get('/api/sales');
   assert.equal(listResponse.statusCode, 200);
   assert.equal(listResponse.body.length, 1);
   assert.equal(listResponse.body[0].transaction_id, payload.transaction_id);
@@ -113,8 +132,10 @@ test('POST /api/postback stores the sale and GET /api/sales returns it', { concu
 
 test('GET /api/postback-url returns the resolved URL', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  const response = await request(app).get('/api/postback-url').set('Host', 'painel.example.com');
+  const response = await auth.get('/api/postback-url').set('Host', 'painel.example.com');
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, { url: 'http://painel.example.com/api/postback' });
 
@@ -134,23 +155,25 @@ test('POST /api/postback requires transaction_id', { concurrency: 1 }, async () 
 
 test('POST /api/attendants requires a 4-character code', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  const shortCodeResponse = await request(app)
+  const shortCodeResponse = await auth
     .post('/api/attendants')
     .send({ name: 'Teste', code: 'abc' });
   assert.equal(shortCodeResponse.statusCode, 400);
 
-  const invalidCharResponse = await request(app)
+  const invalidCharResponse = await auth
     .post('/api/attendants')
     .send({ name: 'Teste', code: 'abc!' });
   assert.equal(invalidCharResponse.statusCode, 400);
 
-  const reservedCodeResponse = await request(app)
+  const reservedCodeResponse = await auth
     .post('/api/attendants')
     .send({ name: 'Teste', code: 'nao_definido' });
   assert.equal(reservedCodeResponse.statusCode, 400);
 
-  const validResponse = await request(app)
+  const validResponse = await auth
     .post('/api/attendants')
     .send({ name: 'Teste', code: 'abcd' });
   assert.equal(validResponse.statusCode, 201);
@@ -160,8 +183,10 @@ test('POST /api/attendants requires a 4-character code', { concurrency: 1 }, asy
 
 test('POST /api/postback identifies attendant from email prefix', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  const attendantCreateResponse = await request(app)
+  const attendantCreateResponse = await auth
     .post('/api/attendants')
     .send({ name: 'João', code: 'joao', monthlyCost: 150 });
   assert.equal(attendantCreateResponse.statusCode, 201);
@@ -185,7 +210,7 @@ test('POST /api/postback identifies attendant from email prefix', { concurrency:
   const response = await request(app).post('/api/postback').send(payload);
   assert.equal(response.statusCode, 201);
 
-  const listResponse = await request(app).get('/api/sales');
+  const listResponse = await auth.get('/api/sales');
   assert.equal(listResponse.statusCode, 200);
   const [sale] = listResponse.body;
   assert.equal(sale.attendant_code, 'joao');
@@ -199,6 +224,8 @@ test('POST /api/postback identifies attendant from email prefix', { concurrency:
 
 test('PUT /api/sales/:transactionId/status updates sale status manually', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
   const salePayload = {
     transaction_id: 'manual-status-1',
@@ -214,7 +241,7 @@ test('PUT /api/sales/:transactionId/status updates sale status manually', { conc
   const postResponse = await request(app).post('/api/postback').send(salePayload);
   assert.equal(postResponse.statusCode, 201);
 
-  const updateResponse = await request(app)
+  const updateResponse = await auth
     .put('/api/sales/manual-status-1/status')
     .send({ status: 'pago' });
   assert.equal(updateResponse.statusCode, 200);
@@ -223,7 +250,7 @@ test('PUT /api/sales/:transactionId/status updates sale status manually', { conc
   assert.equal(updateResponse.body.status_text, 'Pago');
   assert.equal(updateResponse.body.status_css_class, 'pago');
 
-  const listResponse = await request(app).get('/api/sales');
+  const listResponse = await auth.get('/api/sales');
   assert.equal(listResponse.statusCode, 200);
   const updatedSale = listResponse.body.find((sale) => sale.transaction_id === 'manual-status-1');
   assert.ok(updatedSale, 'Updated sale should exist');
@@ -236,6 +263,8 @@ test('PUT /api/sales/:transactionId/status updates sale status manually', { conc
 
 test('PUT /api/sales/:transactionId/status validates status values', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
   const salePayload = {
     transaction_id: 'manual-status-2',
@@ -251,12 +280,12 @@ test('PUT /api/sales/:transactionId/status validates status values', { concurren
   const postResponse = await request(app).post('/api/postback').send(salePayload);
   assert.equal(postResponse.statusCode, 201);
 
-  const invalidResponse = await request(app)
+  const invalidResponse = await auth
     .put('/api/sales/manual-status-2/status')
     .send({ status: 'invalid' });
   assert.equal(invalidResponse.statusCode, 400);
 
-  const notFoundResponse = await request(app)
+  const notFoundResponse = await auth
     .put('/api/sales/unknown-transaction/status')
     .send({ status: 'pago' });
   assert.equal(notFoundResponse.statusCode, 404);
@@ -266,11 +295,13 @@ test('PUT /api/sales/:transactionId/status validates status values', { concurren
 
 test('GET /api/sales applies filters for status, attendant and search', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  await request(app)
+  await auth
     .post('/api/attendants')
     .send({ name: 'João', code: 'joao', monthlyCost: 150 });
-  await request(app).post('/api/attendants').send({ name: 'Maria', code: 'mari' });
+  await auth.post('/api/attendants').send({ name: 'Maria', code: 'mari' });
 
   const salesPayloads = [
     {
@@ -310,22 +341,22 @@ test('GET /api/sales applies filters for status, attendant and search', { concur
     assert.equal(response.statusCode, 201);
   }
 
-  const statusResponse = await request(app).get('/api/sales').query({ status: 'pago' });
+  const statusResponse = await auth.get('/api/sales').query({ status: 'pago' });
   assert.equal(statusResponse.statusCode, 200);
   assert.equal(statusResponse.body.length, 1);
   assert.equal(statusResponse.body[0].transaction_id, 'tx-paid');
 
-  const attendantResponse = await request(app).get('/api/sales').query({ attendant: 'mari' });
+  const attendantResponse = await auth.get('/api/sales').query({ attendant: 'mari' });
   assert.equal(attendantResponse.statusCode, 200);
   assert.equal(attendantResponse.body.length, 1);
   assert.equal(attendantResponse.body[0].transaction_id, 'tx-scheduled');
 
-  const searchResponse = await request(app).get('/api/sales').query({ search: 'cancel' });
+  const searchResponse = await auth.get('/api/sales').query({ search: 'cancel' });
   assert.equal(searchResponse.statusCode, 200);
   assert.equal(searchResponse.body.length, 1);
   assert.equal(searchResponse.body[0].transaction_id, 'tx-other');
 
-  const combinedResponse = await request(app)
+  const combinedResponse = await auth
     .get('/api/sales')
     .query({ status: 'pago', attendant: 'joao', search: 'pago' });
   assert.equal(combinedResponse.statusCode, 200);
@@ -337,19 +368,21 @@ test('GET /api/sales applies filters for status, attendant and search', { concur
 
 test('POST /api/attendants creates a new attendant and GET lists it', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  const createResponse = await request(app)
+  const createResponse = await auth
     .post('/api/attendants')
     .send({ name: 'João', code: 'joia', monthlyCost: 250.75 });
   assert.equal(createResponse.statusCode, 201);
   assert.deepEqual(createResponse.body, { code: 'joia', name: 'João', monthlyCost: 250.75 });
 
-  const duplicateResponse = await request(app)
+  const duplicateResponse = await auth
     .post('/api/attendants')
     .send({ name: 'Outro João', code: 'joia' });
   assert.equal(duplicateResponse.statusCode, 409);
 
-  const listResponse = await request(app).get('/api/attendants');
+  const listResponse = await auth.get('/api/attendants');
   assert.equal(listResponse.statusCode, 200);
   assert.deepEqual(listResponse.body, [{ code: 'joia', name: 'João', monthlyCost: 250.75 }]);
 
@@ -358,8 +391,10 @@ test('POST /api/attendants creates a new attendant and GET lists it', { concurre
 
 test('GET /api/attendants returns an empty list when database is empty', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  const response = await request(app).get('/api/attendants');
+  const response = await auth.get('/api/attendants');
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, []);
 
@@ -368,25 +403,27 @@ test('GET /api/attendants returns an empty list when database is empty', { concu
 
 test('PUT and DELETE /api/attendants update and remove attendants', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  await request(app)
+  await auth
     .post('/api/attendants')
     .send({ name: 'João', code: 'joia', monthlyCost: 100 });
 
-  const updateResponse = await request(app)
+  const updateResponse = await auth
     .put('/api/attendants/joia')
     .send({ name: 'Joana', newCode: 'joab', monthlyCost: 150.5 });
   assert.equal(updateResponse.statusCode, 200);
   assert.deepEqual(updateResponse.body, { code: 'joab', name: 'Joana', monthlyCost: 150.5 });
 
-  const listResponse = await request(app).get('/api/attendants');
+  const listResponse = await auth.get('/api/attendants');
   assert.equal(listResponse.statusCode, 200);
   assert.deepEqual(listResponse.body, [{ code: 'joab', name: 'Joana', monthlyCost: 150.5 }]);
 
-  const deleteResponse = await request(app).delete('/api/attendants/joab');
+  const deleteResponse = await auth.delete('/api/attendants/joab');
   assert.equal(deleteResponse.statusCode, 204);
 
-  const listAfterDelete = await request(app).get('/api/attendants');
+  const listAfterDelete = await auth.get('/api/attendants');
   assert.equal(listAfterDelete.statusCode, 200);
   assert.deepEqual(listAfterDelete.body, []);
 
@@ -395,8 +432,10 @@ test('PUT and DELETE /api/attendants update and remove attendants', { concurrenc
 
 test('PUT /api/sales/:transactionId/attendant assigns and clears an attendant', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  const attendantCreateResponse = await request(app)
+  const attendantCreateResponse = await auth
     .post('/api/attendants')
     .send({ name: 'João', code: 'joao', monthlyCost: 150 });
   assert.equal(attendantCreateResponse.statusCode, 201);
@@ -420,14 +459,14 @@ test('PUT /api/sales/:transactionId/attendant assigns and clears an attendant', 
   const postResponse = await request(app).post('/api/postback').send(salePayload);
   assert.equal(postResponse.statusCode, 201);
 
-  const assignResponse = await request(app)
+  const assignResponse = await auth
     .put('/api/sales/assign-1/attendant')
     .send({ attendant_code: 'joao' });
   assert.equal(assignResponse.statusCode, 200);
   assert.equal(assignResponse.body.attendant_code, 'joao');
   assert.equal(assignResponse.body.attendant_name, 'João');
 
-  const clearResponse = await request(app)
+  const clearResponse = await auth
     .put('/api/sales/assign-1/attendant')
     .send({ attendant_code: 'nao_definido' });
   assert.equal(clearResponse.statusCode, 200);
@@ -439,8 +478,10 @@ test('PUT /api/sales/:transactionId/attendant assigns and clears an attendant', 
 
 test('GET /api/settings returns defaults and PUT updates them', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  const defaultResponse = await request(app).get('/api/settings');
+  const defaultResponse = await auth.get('/api/settings');
   assert.equal(defaultResponse.statusCode, 200);
   assert.deepEqual(defaultResponse.body, {
     name: '',
@@ -457,7 +498,7 @@ test('GET /api/settings returns defaults and PUT updates them', { concurrency: 1
     investment: 4321.98
   };
 
-  const updateResponse = await request(app).put('/api/settings').send(updatePayload);
+  const updateResponse = await auth.put('/api/settings').send(updatePayload);
   assert.equal(updateResponse.statusCode, 200);
   assert.deepEqual(updateResponse.body, {
     ...updatePayload,
@@ -466,7 +507,7 @@ test('GET /api/settings returns defaults and PUT updates them', { concurrency: 1
     monthlyInvestment: 4321.98
   });
 
-  const verifyResponse = await request(app).get('/api/settings');
+  const verifyResponse = await auth.get('/api/settings');
   assert.equal(verifyResponse.statusCode, 200);
   assert.deepEqual(verifyResponse.body, {
     ...updatePayload,
@@ -480,6 +521,8 @@ test('GET /api/settings returns defaults and PUT updates them', { concurrency: 1
 
 test('GET /api/summary defaults to today when no period is provided', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
   const todayDate = dateDaysFromToday(0);
   const yesterdayDate = dateDaysFromToday(-1);
@@ -510,7 +553,7 @@ test('GET /api/summary defaults to today when no period is provided', { concurre
       updated_at: yesterdayDate
     });
 
-  const response = await request(app).get('/api/summary');
+  const response = await auth.get('/api/summary');
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, {
@@ -537,14 +580,16 @@ test('GET /api/summary defaults to today when no period is provided', { concurre
 
 test('GET /api/summary aggregates sales data for the current month and attendant filter', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  await request(app).put('/api/settings').send({
+  await auth.put('/api/settings').send({
     userName: 'Empresa',
     userEmail: 'empresa@example.com',
     monthlyInvestment: 200
   });
 
-  const attendantCreateResponse = await request(app)
+  const attendantCreateResponse = await auth
     .post('/api/attendants')
     .send({ name: 'João', code: 'joao', monthlyCost: 150 });
   assert.equal(attendantCreateResponse.statusCode, 201);
@@ -592,15 +637,15 @@ test('GET /api/summary aggregates sales data for the current month and attendant
     assert.equal(response.statusCode, 201);
   }
 
-  await request(app)
+  await auth
     .put('/api/sales/sum-pago/attendant')
     .send({ attendant_code: 'joao' });
 
-  const attendantsList = await request(app).get('/api/attendants');
+  const attendantsList = await auth.get('/api/attendants');
   assert.equal(attendantsList.statusCode, 200);
   assert.deepEqual(attendantsList.body, [{ code: 'joao', name: 'João', monthlyCost: 150 }]);
 
-  const summaryResponse = await request(app).get('/api/summary').query({ period: 'this_month' });
+  const summaryResponse = await auth.get('/api/summary').query({ period: 'this_month' });
   assert.equal(summaryResponse.statusCode, 200);
   assert.deepEqual(summaryResponse.body, {
     agendado: 1000,
@@ -621,7 +666,7 @@ test('GET /api/summary aggregates sales data for the current month and attendant
     lucroMes: 100
   });
 
-  const attendantSummaryResponse = await request(app)
+  const attendantSummaryResponse = await auth
     .get('/api/summary')
     .query({ period: 'this_month', attendant: 'joao' });
   assert.equal(attendantSummaryResponse.statusCode, 200);
@@ -649,6 +694,8 @@ test('GET /api/summary aggregates sales data for the current month and attendant
 
 test('GET /api/summary filters sales by last_month period', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
   const lastMonthDate = dateInLastMonth(12);
   const thisMonthDate = dateInThisMonth(5);
@@ -679,7 +726,7 @@ test('GET /api/summary filters sales by last_month period', { concurrency: 1 }, 
       updated_at: thisMonthDate
     });
 
-  const response = await request(app).get('/api/summary').query({ period: 'last_month' });
+  const response = await auth.get('/api/summary').query({ period: 'last_month' });
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, {
@@ -706,10 +753,12 @@ test('GET /api/summary filters sales by last_month period', { concurrency: 1 }, 
 
 test('GET /api/summary supports custom date ranges with attendant filter', { concurrency: 1 }, async () => {
   const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
 
-  await request(app).put('/api/settings').send({ monthlyInvestment: 100 });
+  await auth.put('/api/settings').send({ monthlyInvestment: 100 });
 
-  await request(app)
+  await auth
     .post('/api/attendants')
     .send({ name: 'João', code: 'joao', monthlyCost: 80 });
 
@@ -773,7 +822,7 @@ test('GET /api/summary supports custom date ranges with attendant filter', { con
   const startDate = dateDaysFromToday(-4).slice(0, 10);
   const endDate = dateDaysFromToday(-1).slice(0, 10);
 
-  const customResponse = await request(app)
+  const customResponse = await auth
     .get('/api/summary')
     .query({ startDate, endDate });
 
@@ -797,7 +846,7 @@ test('GET /api/summary supports custom date ranges with attendant filter', { con
     lucroMes: 100
   });
 
-  const attendantResponse = await request(app)
+  const attendantResponse = await auth
     .get('/api/summary')
     .query({ startDate, endDate, attendant: 'joao' });
 

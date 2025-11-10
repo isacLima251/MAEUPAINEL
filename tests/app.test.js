@@ -944,3 +944,123 @@ test('GET /api/summary supports custom date ranges with attendant filter', { con
 
   await closeDatabase(db);
 });
+
+test('GET /api/reports/attendants returns ranking of paid sales for the selected period', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
+
+  const attendantsPayloads = [
+    { name: 'João Teste', code: 'joao', monthlyCost: 0 },
+    { name: 'Luciana Teste', code: 'luci', monthlyCost: 0 }
+  ];
+
+  for (const attendant of attendantsPayloads) {
+    const createResponse = await auth.post('/api/attendants').send(attendant);
+    assert.equal(createResponse.statusCode, 201);
+  }
+
+  const salesPayloads = [
+    {
+      transaction_id: 'report-joao-paid',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'joao.teste@example.com',
+      product_name: 'Plano Premium',
+      total_value_cents: 150000,
+      created_at: currentMonthDate(2),
+      updated_at: currentMonthDate(2)
+    },
+    {
+      transaction_id: 'report-luci-paid',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'luci.teste@example.com',
+      product_name: 'Plano Básico',
+      total_value_cents: 95000,
+      created_at: currentMonthDate(3),
+      updated_at: currentMonthDate(3)
+    },
+    {
+      transaction_id: 'report-unknown-paid',
+      status_code: 3,
+      status_text: 'Pago',
+      client_email: 'sem.atendente@example.com',
+      product_name: 'Plano Starter',
+      total_value_cents: 40000,
+      created_at: currentMonthDate(4),
+      updated_at: currentMonthDate(4)
+    },
+    {
+      transaction_id: 'report-joao-agendado',
+      status_code: 2,
+      status_text: 'Agendado',
+      client_email: 'joao.agendado@example.com',
+      product_name: 'Plano Premium',
+      total_value_cents: 50000,
+      created_at: currentMonthDate(5),
+      updated_at: currentMonthDate(5)
+    },
+    {
+      transaction_id: 'report-joao-frustrado',
+      status_code: 5,
+      status_text: 'Frustrado',
+      client_email: 'joao.frustrado@example.com',
+      product_name: 'Plano Premium',
+      total_value_cents: 50000,
+      created_at: currentMonthDate(6),
+      updated_at: currentMonthDate(6)
+    },
+    {
+      transaction_id: 'report-luci-agendado',
+      status_code: 2,
+      status_text: 'Agendado',
+      client_email: 'luci.agenda@example.com',
+      product_name: 'Plano Básico',
+      total_value_cents: 20000,
+      created_at: currentMonthDate(7),
+      updated_at: currentMonthDate(7)
+    }
+  ];
+
+  const lastMonthSale = {
+    transaction_id: 'report-joao-lastmonth',
+    status_code: 3,
+    status_text: 'Pago',
+    client_email: 'joao.passado@example.com',
+    product_name: 'Plano Premium',
+    total_value_cents: 200000,
+    created_at: dateInLastMonth(10),
+    updated_at: dateInLastMonth(10)
+  };
+
+  for (const payload of [...salesPayloads, lastMonthSale]) {
+    const response = await request(app).post('/api/postback').send(payload);
+    assert.equal(response.statusCode, 201);
+  }
+
+  const response = await auth.get('/api/reports/attendants').query({ period: 'this_month' });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, [
+    { rank: 1, attendant_name: 'João Teste', total_pago_cents: 150000, agendado_count: 1, frustrado_count: 1 },
+    { rank: 2, attendant_name: 'Luciana Teste', total_pago_cents: 95000, agendado_count: 1, frustrado_count: 0 },
+    { rank: 3, attendant_name: 'Não Definido', total_pago_cents: 40000, agendado_count: 0, frustrado_count: 0 }
+  ]);
+
+  await closeDatabase(db);
+});
+
+test('GET /api/reports/attendants returns 400 when mixing period and custom dates', { concurrency: 1 }, async () => {
+  const { app, db } = setupApp();
+  const token = await loginAndGetToken(app);
+  const auth = createAuthClient(app, token);
+
+  const response = await auth
+    .get('/api/reports/attendants')
+    .query({ period: 'today', startDate: '2024-01-01', endDate: '2024-01-31' });
+
+  assert.equal(response.statusCode, 400);
+  assert.ok(response.body.message.includes('either period or startDate/endDate'));
+
+  await closeDatabase(db);
+});

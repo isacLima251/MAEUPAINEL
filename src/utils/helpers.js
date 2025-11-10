@@ -1,4 +1,5 @@
 const DEFAULT_ATTENDANT = { code: 'nao_definido', name: 'Não Definido' };
+const DEFAULT_CAMPAIGN_CODE = 'nao_definida';
 
 const SUMMARY_PERIODS = new Set(['today', 'this_week', 'this_month', 'last_month', 'this_year']);
 
@@ -216,6 +217,56 @@ const resolvePostbackUrl = (req, options = {}) => {
   return `${protocol}://${hostHeader}/api/postback`;
 };
 
+const parseClientEmailMetadata = (email) => {
+  if (!email || typeof email !== 'string') {
+    return {
+      attendantCode: null,
+      campaignCode: null,
+      clientIdentifier: null,
+      prefix: null,
+      parts: []
+    };
+  }
+
+  const trimmedEmail = email.trim();
+  if (!trimmedEmail) {
+    return {
+      attendantCode: null,
+      campaignCode: null,
+      clientIdentifier: null,
+      prefix: null,
+      parts: []
+    };
+  }
+
+  const [prefixPart = ''] = trimmedEmail.split('@');
+  const prefix = prefixPart.trim().toLowerCase();
+  if (!prefix) {
+    return {
+      attendantCode: null,
+      campaignCode: null,
+      clientIdentifier: null,
+      prefix: null,
+      parts: []
+    };
+  }
+
+  const parts = prefix
+    .split('.')
+    .map((part) => part.trim())
+    .filter((part) => Boolean(part));
+
+  const [attendantPart = null, campaignPart = null, clientIdentifier = null] = parts;
+
+  return {
+    attendantCode: normalizeAttendantCode(attendantPart),
+    campaignCode: campaignPart ? campaignPart.toLowerCase() : null,
+    clientIdentifier,
+    prefix,
+    parts
+  };
+};
+
 const buildAttendantCodeCandidates = (email) => {
   if (!email || typeof email !== 'string') {
     return [];
@@ -238,6 +289,11 @@ const buildAttendantCodeCandidates = (email) => {
       candidateCodes.push(normalizedCode);
     }
   };
+
+  const { attendantCode } = parseClientEmailMetadata(normalizedEmail);
+  if (attendantCode) {
+    addCandidate(attendantCode);
+  }
 
   if (normalizedEmail.length >= 5) {
     addCandidate(normalizedEmail.slice(0, 5));
@@ -388,6 +444,7 @@ const buildSaleResponse = (row) => {
     ...row,
     attendant_code: row.attendant_code || DEFAULT_ATTENDANT.code,
     attendant_name: row.attendant_name || DEFAULT_ATTENDANT.name,
+    campaign_code: row.campaign_code || DEFAULT_CAMPAIGN_CODE,
     valor_formatado: formatCurrency(row.total_value_cents),
     status_css_class: statusCssClass,
     data_formatada: formatDate(row.created_at)
@@ -425,6 +482,8 @@ module.exports = {
   resolveSummaryDateRange,
   mapSettingsResponse,
   resolvePostbackUrl,
+  DEFAULT_CAMPAIGN_CODE,
+  parseClientEmailMetadata,
   buildAttendantCodeCandidates,
   extractAttendantFromEmail,
   findAttendantByCodeCandidates,

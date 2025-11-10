@@ -1,6 +1,8 @@
 const {
   DEFAULT_ATTENDANT,
+  DEFAULT_CAMPAIGN_CODE,
   buildAttendantCodeCandidates,
+  parseClientEmailMetadata,
   extractAttendantFromEmail,
   findAttendantByCodeCandidates,
   resolvePostbackUrl
@@ -15,11 +17,13 @@ const handlePostback = (db) => (req, res) => {
   }
 
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const emailMetadata = parseClientEmailMetadata(payload.client_email);
   const candidateCodes = buildAttendantCodeCandidates(payload.client_email);
 
   const finalize = (resolvedAttendant) => {
     const fallbackAttendant = extractAttendantFromEmail(payload.client_email) || DEFAULT_ATTENDANT;
     const attendant = resolvedAttendant || fallbackAttendant || DEFAULT_ATTENDANT;
+    const campaignCode = emailMetadata.campaignCode || DEFAULT_CAMPAIGN_CODE;
 
     const sale = {
       transaction_id: String(transactionId),
@@ -35,7 +39,8 @@ const handlePostback = (db) => (req, res) => {
       updated_at: payload.updated_at || now,
       raw_payload: JSON.stringify(payload),
       attendant_code: attendant.code || DEFAULT_ATTENDANT.code,
-      attendant_name: attendant.name || DEFAULT_ATTENDANT.name
+      attendant_name: attendant.name || DEFAULT_ATTENDANT.name,
+      campaign_code: campaignCode
     };
 
     const upsertQuery = `
@@ -53,8 +58,9 @@ const handlePostback = (db) => (req, res) => {
         updated_at,
         raw_payload,
         attendant_code,
-        attendant_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        attendant_name,
+        campaign_code
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(transaction_id) DO UPDATE SET
         status_code = excluded.status_code,
         status_text = excluded.status_text,
@@ -68,7 +74,8 @@ const handlePostback = (db) => (req, res) => {
         updated_at = excluded.updated_at,
         raw_payload = excluded.raw_payload,
         attendant_code = excluded.attendant_code,
-        attendant_name = excluded.attendant_name
+        attendant_name = excluded.attendant_name,
+        campaign_code = excluded.campaign_code
     `;
 
     const values = [
@@ -85,7 +92,8 @@ const handlePostback = (db) => (req, res) => {
       sale.updated_at,
       sale.raw_payload,
       sale.attendant_code,
-      sale.attendant_name
+      sale.attendant_name,
+      sale.campaign_code
     ];
 
     db.run(upsertQuery, values, (error) => {

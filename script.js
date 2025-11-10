@@ -24,6 +24,7 @@ let modalData = null;
 let modalHistorico = null;
 let modalAtendenteDisplay = null;
 let modalAtendenteSelect = null;
+let modalCampanha = null;
 let manualStatusButtons = [];
 let modalCurrentTransactionIdInput = null;
 let attendantsTableBodyEl = null;
@@ -89,6 +90,7 @@ function cacheDomElements() {
     modalHistorico = document.getElementById('modal-historico');
     modalAtendenteDisplay = document.getElementById('modal-atendente-display');
     modalAtendenteSelect = document.getElementById('modal-atendente-select');
+    modalCampanha = document.getElementById('modal-campanha');
     manualStatusButtons = Array.from(document.querySelectorAll('.manual-status-btn'));
     modalCurrentTransactionIdInput = document.getElementById('modal-current-transaction-id');
     attendantsTableBodyEl = document.getElementById('attendants-table-body');
@@ -952,6 +954,7 @@ async function loadSalesData(filters = {}) {
                 : sale.historico || '';
             const atendenteCodigo = sale.atendente || sale.attendant_code || '';
             const atendenteNome = sale.atendente_nome || sale.attendant_name || '';
+            const campanhaCodigo = sale.campaign_code || sale.campanha || '';
 
             row.dataset.id = transactionId;
             row.dataset.cliente = cliente;
@@ -968,6 +971,8 @@ async function loadSalesData(filters = {}) {
             row.dataset.historico = historico;
             row.dataset.atendente = atendenteCodigo || 'nao_definido';
             row.dataset.atendenteNome = atendenteNome;
+            row.dataset.campanha = campanhaCodigo || 'nao_definida';
+            row.dataset.campanhaDisplay = campanhaCodigo || 'N/D';
 
             const clienteTd = document.createElement('td');
             clienteTd.textContent = cliente;
@@ -977,6 +982,9 @@ async function loadSalesData(filters = {}) {
 
             const atendenteTd = document.createElement('td');
             atendenteTd.textContent = atendenteNome || obterNomeAtendente(atendenteCodigo) || 'Não Definido';
+
+            const campanhaTd = document.createElement('td');
+            campanhaTd.textContent = campanhaCodigo || 'N/D';
 
             const dataTd = document.createElement('td');
             dataTd.textContent = dataAgendada;
@@ -996,6 +1004,7 @@ async function loadSalesData(filters = {}) {
             row.appendChild(clienteTd);
             row.appendChild(produtoTd);
             row.appendChild(atendenteTd);
+            row.appendChild(campanhaTd);
             row.appendChild(dataTd);
             row.appendChild(valorTd);
             row.appendChild(statusTd);
@@ -1057,6 +1066,7 @@ function abrirModal(event) {
     const historico = linhaTabela.dataset.historico || '';
     const atendenteCodigo = linhaTabela.dataset.atendente || '';
     const atendenteNome = linhaTabela.dataset.atendenteNome || obterNomeAtendente(atendenteCodigo) || '';
+    const campanhaDisplay = linhaTabela.dataset.campanhaDisplay || linhaTabela.dataset.campanha || 'N/D';
     const transactionId = linhaTabela.dataset.id || '';
 
     if (modalCurrentTransactionIdInput) {
@@ -1072,6 +1082,7 @@ function abrirModal(event) {
     if (modalProduto) modalProduto.textContent = produto;
     if (modalValor) modalValor.textContent = valor;
     if (modalData) modalData.textContent = formatDate(data);
+    if (modalCampanha) modalCampanha.textContent = campanhaDisplay;
     if (modalStatusContainer) {
         modalStatusContainer.innerHTML = `<span class="status ${status}">${statusTexto}</span>`;
     }

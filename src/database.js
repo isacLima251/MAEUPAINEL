@@ -39,7 +39,8 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
         updated_at TEXT,
         raw_payload TEXT,
         attendant_code TEXT,
-        attendant_name TEXT
+        attendant_name TEXT,
+        campaign_code TEXT
       )`
     );
 
@@ -62,6 +63,7 @@ const initializeDatabase = (databasePath = defaultDatabasePath) => {
       ensureColumn('client_phone');
       ensureColumn('attendant_code');
       ensureColumn('attendant_name');
+      ensureColumn('campaign_code');
     });
 
     db.run(
